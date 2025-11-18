@@ -23,11 +23,12 @@ export default function DeleteCampsitePage({
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [campsite, setCampsite] = useState<any>(null);
+  const [campsiteId] = useState(params.id);
 
   useEffect(() => {
     const fetchCampsite = async () => {
       try {
-        const response = await fetch(`/api/admin/campsites/${params.id}`);
+        const response = await fetch(`/api/admin/campsites/${campsiteId}`);
         if (!response.ok) {
           throw new Error("캠핑장 정보를 불러오는데 실패했습니다");
         }
@@ -44,7 +45,7 @@ export default function DeleteCampsitePage({
     };
 
     fetchCampsite();
-  }, [params.id, router]);
+  }, [campsiteId, router]);
 
   const handleDelete = async () => {
     if (!confirm(`정말로 "${campsite.name}" 캠핑장을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
@@ -54,7 +55,7 @@ export default function DeleteCampsitePage({
     setIsDeleting(true);
 
     try {
-      const response = await fetch(`/api/admin/campsites/${params.id}`, {
+      const response = await fetch(`/api/admin/campsites/${campsiteId}`, {
         method: "DELETE",
       });
 

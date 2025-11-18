@@ -109,12 +109,14 @@ model CrawlLog {
   sourceSiteId String
   sourceSite   SourceSite @relation(fields: [sourceSiteId], references: [id])
 
-  startedAt         DateTime    @default(now())
-  finishedAt        DateTime?
-  status            CrawlStatus
-  newItemsCount     Int         @default(0)
-  updatedItemsCount Int         @default(0)
-  errorMessage      String?
+  startedAt      DateTime    @default(now())
+  completedAt    DateTime?
+  status         CrawlStatus
+  itemsProcessed Int         @default(0)
+  itemsCreated   Int         @default(0)
+  itemsUpdated   Int         @default(0)
+  itemsFailed    Int         @default(0)
+  message        String?
 }
 
 // 애완견 크기 카테고리

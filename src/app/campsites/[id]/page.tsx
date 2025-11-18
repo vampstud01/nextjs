@@ -87,9 +87,10 @@ function getDogSizeBadge(sizeCategory: string | null) {
 export default async function CampsiteDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  const campsite = await getCampsiteData(params.id);
+  const { id } = await params;
+  const campsite = await getCampsiteData(id);
 
   if (!campsite) {
     notFound();

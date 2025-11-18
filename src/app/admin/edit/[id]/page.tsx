@@ -33,6 +33,7 @@ export default function EditCampsitePage({
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [campsiteId] = useState(params.id);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -51,7 +52,7 @@ export default function EditCampsitePage({
   useEffect(() => {
     const fetchCampsite = async () => {
       try {
-        const response = await fetch(`/api/admin/campsites/${params.id}`);
+        const response = await fetch(`/api/admin/campsites/${campsiteId}`);
         if (!response.ok) {
           throw new Error("캠핑장 정보를 불러오는데 실패했습니다");
         }
@@ -80,14 +81,14 @@ export default function EditCampsitePage({
     };
 
     fetchCampsite();
-  }, [params.id, router]);
+  }, [campsiteId, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
 
     try {
-      const response = await fetch(`/api/admin/campsites/${params.id}`, {
+      const response = await fetch(`/api/admin/campsites/${campsiteId}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",

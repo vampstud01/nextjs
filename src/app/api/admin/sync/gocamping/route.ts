@@ -32,11 +32,37 @@ export async function POST() {
   let itemsFailed = 0;
 
   try {
-    // 1. CrawlLog 생성
+    // 1. SourceSite 조회 또는 생성
+    let sourceSite = await supabase
+      .from("SourceSite")
+      .select("id")
+      .eq("name", "고캠핑(공공데이터포털)")
+      .single();
+
+    if (sourceSite.error || !sourceSite.data) {
+      // SourceSite가 없으면 생성
+      const { data: newSourceSite, error: createError } = await supabase
+        .from("SourceSite")
+        .insert({
+          name: "고캠핑(공공데이터포털)",
+          baseUrl: API_URL,
+          type: "JSON_API",
+          enabled: true,
+        })
+        .select()
+        .single();
+
+      if (createError || !newSourceSite) {
+        throw new Error("SourceSite 생성 실패");
+      }
+      sourceSite = { data: newSourceSite, error: null };
+    }
+
+    // 2. CrawlLog 생성
     const { data: crawlLog, error: logError } = await supabase
       .from("CrawlLog")
       .insert({
-        sourceSiteId: "gocamping-official",
+        sourceSiteId: sourceSite.data.id,
         status: "RUNNING",
         startedAt: startTime.toISOString(),
       })
@@ -44,10 +70,11 @@ export async function POST() {
       .single();
 
     if (logError) {
-      throw new Error("CrawlLog 생성 실패");
+      console.error("CrawlLog 생성 에러:", logError);
+      throw new Error("CrawlLog 생성 실패: " + logError.message);
     }
 
-    // 2. GoCamping API 호출 (페이지 1만 가져오기 - 데모용)
+    // 3. GoCamping API 호출 (페이지 1만 가져오기 - 데모용)
     const url = `${API_URL}?serviceKey=${API_KEY}&numOfRows=100&pageNo=1&MobileOS=ETC&MobileApp=DogCamp&_type=json`;
     
     const response = await fetch(url);
@@ -60,7 +87,7 @@ export async function POST() {
       throw new Error("API 응답에 데이터가 없습니다.");
     }
 
-    // 3. 각 캠핑장 처리
+    // 4. 각 캠핑장 처리
     for (const item of items) {
       try {
         itemsProcessed++;
@@ -170,7 +197,7 @@ export async function POST() {
       }
     }
 
-    // 4. CrawlLog 업데이트 (성공)
+    // 5. CrawlLog 업데이트 (성공)
     await supabase
       .from("CrawlLog")
       .update({

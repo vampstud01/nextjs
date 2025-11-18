@@ -4,8 +4,9 @@ import { supabase } from "@/lib/supabase";
 // 특정 캠핑장 조회
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const params = await context.params;
   try {
     const { data: campsite, error } = await supabase
       .from("Campsite")
@@ -42,8 +43,9 @@ export async function GET(
 // 캠핑장 수정
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const params = await context.params;
   try {
     const body = await request.json();
 
@@ -145,8 +147,9 @@ export async function PUT(
 // 캠핑장 삭제
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const params = await context.params;
   try {
     // 1. DogPolicy 먼저 삭제 (외래키 제약 조건 때문에)
     const { error: policyError } = await supabase

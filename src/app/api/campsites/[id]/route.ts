@@ -1,15 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-interface Params {
-  params: {
-    id: string;
-  };
-}
-
 // 캠핑장 상세 조회 API
 // GET /api/campsites/:id
-export async function GET(_request: Request, { params }: Params) {
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const params = await context.params;
   const { id } = params;
 
   try {
