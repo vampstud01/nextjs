@@ -9,35 +9,54 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Tent, Edit, Trash2, Plus } from "lucide-react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import AdminHeader from "@/components/AdminHeader";
 
 // 관리자 페이지용 캠핑장 데이터 가져오기
 async function getAdminCampsites() {
   try {
-    const { data: campsites, error } = await supabase
-      .from("Campsite")
-      .select(
+    const supabase = getSupabaseAdmin();
+    
+    // 모든 데이터를 가져오기 위해 페이지네이션 사용
+    let allCampsites: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { data: campsites, error } = await supabase
+        .from("Campsite")
+        .select(
+          `
+          *,
+          dogPolicy:DogPolicy(*),
+          facilities:CampsiteFacility(
+            facilityTag:FacilityTag(*)
+          )
         `
-        *,
-        dogPolicy:DogPolicy(*),
-        facilities:CampsiteFacility(
-          facilityTag:FacilityTag(*)
         )
-      `
-      )
-      .order("createdAt", { ascending: false });
+        .order("createdAt", { ascending: false })
+        .range(from, from + pageSize - 1);
 
-    if (error) {
-      console.error("Supabase query error:", error);
+      if (error) {
+        console.error("Supabase query error:", error);
+        break;
+      }
+
+      if (campsites && campsites.length > 0) {
+        allCampsites = allCampsites.concat(campsites);
+        from += pageSize;
+        hasMore = campsites.length === pageSize;
+      } else {
+        hasMore = false;
+      }
+    }
+
+    if (!allCampsites || allCampsites.length === 0) {
       return [];
     }
 
-    if (!campsites) {
-      return [];
-    }
-
-    return campsites.map((campsite: any) => ({
+    return allCampsites.map((campsite: any) => ({
       id: campsite.id,
       name: campsite.name,
       region: campsite.address?.split(" ").slice(0, 2).join(" ") || "",

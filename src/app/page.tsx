@@ -17,31 +17,13 @@ import {
 } from "@/components/ui/select";
 import { Search, MapPin, Dog, Tent, Heart } from "lucide-react";
 import Link from "next/link";
+import Header from "@/components/Header";
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-amber-50">
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Tent className="h-8 w-8 text-green-600" />
-              <h1 className="text-2xl font-bold text-slate-900">
-                DogCamp
-              </h1>
-            </div>
-            <nav className="flex items-center gap-4">
-              <Link href="/search">
-                <Button variant="ghost">캠핑장 찾기</Button>
-              </Link>
-              <Link href="/admin">
-                <Button variant="outline">관리자</Button>
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-gradient-to-br from-green-600 to-blue-600 px-4 py-20 text-white sm:px-6 lg:px-8">
