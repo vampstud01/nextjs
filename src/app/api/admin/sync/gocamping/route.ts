@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { createId } from "@paralleldrive/cuid2";
 
 // GoCamping API 키
 const API_KEY = process.env.GOCAMPING_API_KEY;
@@ -46,9 +47,11 @@ export async function POST() {
 
     if (findError || !existingSourceSite) {
       // SourceSite가 없으면 생성
+      const newSourceSiteId = createId();
       const { data: newSourceSite, error: createError } = await supabase
         .from("SourceSite")
         .insert({
+          id: newSourceSiteId,
           name: "고캠핑(공공데이터포털)",
           baseUrl: API_URL,
           type: "JSON_API",
@@ -73,9 +76,11 @@ export async function POST() {
     }
 
     // 2. CrawlLog 생성
+    const newCrawlLogId = createId();
     const { data: crawlLog, error: logError } = await supabase
       .from("CrawlLog")
       .insert({
+        id: newCrawlLogId,
         sourceSiteId: sourceSiteId,
         status: "RUNNING",
         startedAt: startTime.toISOString(),
@@ -92,18 +97,60 @@ export async function POST() {
       crawlLogId = crawlLog.id;
     }
 
-    // 3. GoCamping API 호출 (페이지 1만 가져오기 - 데모용)
-    const url = `${API_URL}?serviceKey=${API_KEY}&numOfRows=100&pageNo=1&MobileOS=ETC&MobileApp=DogCamp&_type=json`;
-    
-    const response = await fetch(url);
-    const data = await response.json();
+    // 3. GoCamping API 호출 - 전체 데이터 가져오기
+    // 먼저 첫 페이지를 가져와서 전체 개수 확인
+    const firstPageUrl = `${API_URL}?serviceKey=${API_KEY}&numOfRows=100&pageNo=1&MobileOS=ETC&MobileApp=DogCamp&_type=json`;
+    const firstPageResponse = await fetch(firstPageUrl);
+    const firstPageData = await firstPageResponse.json();
 
-    const items: GoCampingItem[] =
-      data?.response?.body?.items?.item || [];
+    const totalCount =
+      firstPageData?.response?.body?.totalCount ||
+      firstPageData?.response?.body?.items?.item?.length ||
+      0;
+
+    if (totalCount === 0) {
+      throw new Error("API 응답에 데이터가 없습니다.");
+    }
+
+    // 전체 데이터 수집
+    const allItems: GoCampingItem[] = [];
+    const numOfRows = 100; // 한 페이지당 항목 수
+    const totalPages = Math.ceil(totalCount / numOfRows);
+
+    console.log(`전체 ${totalCount}개 항목, ${totalPages}페이지를 가져옵니다...`);
+
+    // 첫 페이지 데이터 추가
+    const firstPageItems =
+      firstPageData?.response?.body?.items?.item || [];
+    if (Array.isArray(firstPageItems)) {
+      allItems.push(...firstPageItems);
+    }
+
+    // 나머지 페이지들 가져오기
+    for (let pageNo = 2; pageNo <= totalPages; pageNo++) {
+      const pageUrl = `${API_URL}?serviceKey=${API_KEY}&numOfRows=${numOfRows}&pageNo=${pageNo}&MobileOS=ETC&MobileApp=DogCamp&_type=json`;
+      const pageResponse = await fetch(pageUrl);
+      const pageData = await pageResponse.json();
+
+      const pageItems = pageData?.response?.body?.items?.item || [];
+      if (Array.isArray(pageItems)) {
+        allItems.push(...pageItems);
+        console.log(`페이지 ${pageNo}/${totalPages} 완료 (${allItems.length}/${totalCount}개 수집)`);
+      }
+
+      // API 호출 제한을 고려한 짧은 대기
+      if (pageNo < totalPages) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    }
+
+    const items = allItems;
 
     if (!Array.isArray(items) || items.length === 0) {
       throw new Error("API 응답에 데이터가 없습니다.");
     }
+
+    console.log(`총 ${items.length}개 항목을 가져왔습니다. 처리 시작...`);
 
     // 4. 각 캠핑장 처리
     for (const item of items) {
@@ -144,6 +191,7 @@ export async function POST() {
               mainImageUrl: item.firstImageUrl || null,
               externalUrl: item.homepage || null,
               intro: item.intro || null,
+              updatedAt: new Date().toISOString(),
             })
             .eq("id", existing.id);
 
@@ -168,7 +216,9 @@ export async function POST() {
               })
               .eq("id", existingPolicy.id);
           } else if (dogAllowed) {
+            const newDogPolicyId = createId();
             await supabase.from("DogPolicy").insert({
+              id: newDogPolicyId,
               campsiteId: existing.id,
               allowed: dogAllowed,
               sizeCategory: dogSizeCategory,
@@ -179,9 +229,12 @@ export async function POST() {
           itemsUpdated++;
         } else {
           // 생성
+          const newCampsiteId = createId();
+          const now = new Date().toISOString();
           const { data: newCampsite, error: createError } = await supabase
             .from("Campsite")
             .insert({
+              id: newCampsiteId,
               externalId,
               name: item.facltNm || "",
               address: item.addr1 || "",
@@ -189,6 +242,8 @@ export async function POST() {
               mainImageUrl: item.firstImageUrl || null,
               externalUrl: item.homepage || null,
               intro: item.intro || null,
+              createdAt: now,
+              updatedAt: now,
             })
             .select()
             .single();
@@ -199,7 +254,9 @@ export async function POST() {
 
           // DogPolicy 생성
           if (dogAllowed && newCampsite) {
+            const newDogPolicyId = createId();
             await supabase.from("DogPolicy").insert({
+              id: newDogPolicyId,
               campsiteId: newCampsite.id,
               allowed: dogAllowed,
               sizeCategory: dogSizeCategory,
