@@ -1,33 +1,13 @@
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { MapPin, Dog, Phone, ExternalLink, Tent, Filter } from "lucide-react";
+import { Tent } from "lucide-react";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import CampsiteList from "@/components/CampsiteList";
 
 // 실제 DB에서 캠핑장 데이터 가져오기
 async function getCampsites() {
   try {
     const campsites = await prisma.campsite.findMany({
-      where: {
-        dogPolicy: {
-          allowed: true, // 반려견 가능한 캠핑장만
-        },
-      },
       include: {
         dogPolicy: true,
         facilities: {
@@ -39,7 +19,7 @@ async function getCampsites() {
       orderBy: {
         name: "asc",
       },
-      take: 50, // 최대 50개
+      take: 100, // 최대 100개
     });
 
     return campsites.map((campsite) => ({
@@ -63,16 +43,9 @@ async function getCampsites() {
   }
 }
 
-function getDogSizeBadge(sizeCategory: string | null) {
-  if (!sizeCategory) return <Badge variant="secondary">전체</Badge>;
-  if (sizeCategory === "SMALL") return <Badge className="bg-green-100 text-green-700">소형견</Badge>;
-  if (sizeCategory === "MEDIUM") return <Badge className="bg-blue-100 text-blue-700">중형견</Badge>;
-  if (sizeCategory === "LARGE") return <Badge className="bg-purple-100 text-purple-700">대형견</Badge>;
-  return <Badge variant="secondary">{sizeCategory}</Badge>;
-}
-
 export default async function SearchPage() {
   const campsites = await getCampsites();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-amber-50">
       {/* Header */}
@@ -98,221 +71,14 @@ export default async function SearchPage() {
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
           <h2 className="mb-2 text-3xl font-bold text-slate-900">
-            반려견 동반 가능 캠핑장
+            캠핑장 검색
           </h2>
           <p className="text-slate-600">
-            총 <span className="font-semibold text-green-600">{campsites.length}개</span>의 캠핑장을 찾았습니다
+            총 <span className="font-semibold text-green-600">{campsites.length}개</span>의 캠핑장
           </p>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-4">
-          {/* Filters Sidebar */}
-          <aside className="lg:col-span-1">
-            <Card className="sticky top-4">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Filter className="h-5 w-5" />
-                  필터
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    지역
-                  </label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="전국" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">전국</SelectItem>
-                      <SelectItem value="gyeonggi">경기도</SelectItem>
-                      <SelectItem value="gangwon">강원도</SelectItem>
-                      <SelectItem value="chungbuk">충청북도</SelectItem>
-                      <SelectItem value="chungnam">충청남도</SelectItem>
-                      <SelectItem value="gyeongbuk">경상북도</SelectItem>
-                      <SelectItem value="gyeongnam">경상남도</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    반려견 크기
-                  </label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="전체" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">전체</SelectItem>
-                      <SelectItem value="small">소형견 (~10kg)</SelectItem>
-                      <SelectItem value="medium">중형견 (10~25kg)</SelectItem>
-                      <SelectItem value="large">대형견 (25kg~)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Separator />
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">
-                    정렬
-                  </label>
-                  <Select defaultValue="name">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="name">이름순</SelectItem>
-                      <SelectItem value="region">지역순</SelectItem>
-                      <SelectItem value="recent">최신순</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Button className="w-full bg-green-600 hover:bg-green-700">
-                  필터 적용
-                </Button>
-              </CardContent>
-            </Card>
-          </aside>
-
-          {/* Campsite List */}
-          <div className="lg:col-span-3">
-            <div className="space-y-6">
-              {campsites.map((campsite) => (
-                <Card key={campsite.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                  <div className="grid md:grid-cols-3">
-                    {/* Image */}
-                    <div className="relative h-48 bg-gradient-to-br from-green-100 to-blue-100 md:h-auto">
-                      {campsite.mainImageUrl ? (
-                        <img
-                          src={campsite.mainImageUrl}
-                          alt={campsite.name}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full items-center justify-center">
-                          <Tent className="h-16 w-16 text-green-300" />
-                        </div>
-                      )}
-                      <div className="absolute right-2 top-2">
-                        {campsite.dogPolicy.allowed && (
-                          <Badge className="bg-green-600">
-                            <Dog className="mr-1 h-3 w-3" />
-                            반려견 가능
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Content */}
-                    <div className="md:col-span-2">
-                      <CardHeader>
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <CardTitle className="text-xl">
-                              {campsite.name}
-                            </CardTitle>
-                            <CardDescription className="mt-1 flex items-center gap-1">
-                              <MapPin className="h-4 w-4" />
-                              {campsite.region}
-                            </CardDescription>
-                          </div>
-                          {getDogSizeBadge(campsite.dogPolicy.sizeCategory)}
-                        </div>
-                      </CardHeader>
-
-                      <CardContent className="space-y-4">
-                        {/* Address & Phone */}
-                        <div className="space-y-2 text-sm text-slate-600">
-                          <p>{campsite.address}</p>
-                          {campsite.phone && (
-                            <p className="flex items-center gap-1">
-                              <Phone className="h-4 w-4" />
-                              {campsite.phone}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Dog Policy */}
-                        <div>
-                          <p className="mb-1 text-sm font-medium text-slate-700">
-                            반려견 정책
-                          </p>
-                          <p className="text-sm text-slate-600">
-                            {campsite.dogPolicy.note}
-                          </p>
-                        </div>
-
-                        {/* Facilities */}
-                        {campsite.facilities.length > 0 && (
-                          <div>
-                            <p className="mb-2 text-sm font-medium text-slate-700">
-                              편의시설
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {campsite.facilities.slice(0, 5).map((facility) => (
-                                <Badge key={facility} variant="outline" className="text-xs">
-                                  {facility}
-                                </Badge>
-                              ))}
-                              {campsite.facilities.length > 5 && (
-                                <Badge variant="outline" className="text-xs">
-                                  +{campsite.facilities.length - 5}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Actions */}
-                        <div className="flex gap-2 pt-2">
-                          <Link href={`/campsites/${campsite.id}`} className="flex-1">
-                            <Button variant="outline" className="w-full">
-                              상세보기
-                            </Button>
-                          </Link>
-                          {campsite.externalUrl && (
-                            <Button
-                              className="flex-1 bg-green-600 hover:bg-green-700"
-                              asChild
-                            >
-                              <a
-                                href={campsite.externalUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                <ExternalLink className="mr-2 h-4 w-4" />
-                                예약하기
-                              </a>
-                            </Button>
-                          )}
-                        </div>
-                      </CardContent>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-
-            {/* Pagination */}
-            <div className="mt-8 flex justify-center">
-              <div className="flex gap-2">
-                <Button variant="outline" disabled>
-                  이전
-                </Button>
-                <Button className="bg-green-600">1</Button>
-                <Button variant="outline" disabled>
-                  다음
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <CampsiteList campsites={campsites} />
       </div>
 
       {/* Footer */}
