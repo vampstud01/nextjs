@@ -17,96 +17,51 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { MapPin, Dog, Phone, ExternalLink, Tent, Filter } from "lucide-react";
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
 
-// 실제 데이터베이스에서 가져올 데이터 (현재는 하드코딩)
-const campsites = [
-  {
-    id: "gocamping-100704",
-    name: "옥당걸숲속관광농원",
-    region: "경상북도 김천시",
-    address: "경북 김천시 부항면 안간1길 700",
-    phone: "054-434-7773",
-    mainImageUrl: "https://gocamping.or.kr/upload/camp/100704/thumb/thumb_720_3455yavJjzbNkRM0fR7yOVtb.jpg",
-    externalUrl: "http://옥당걸.kr",
-    dogPolicy: {
-      allowed: true,
-      sizeCategory: "SMALL",
-      note: "가능(소형견)",
-    },
-    facilities: ["전기", "무선인터넷", "장작판매", "온수", "트렘폴린", "물놀이장", "놀이터", "산책로", "운동시설", "마트.편의점", "식당"],
-  },
-  {
-    id: "gocamping-102000",
-    name: "노아오토캠핑장",
-    region: "충청남도 금산군",
-    address: "충남 금산군 제원면 금강로 626",
-    phone: "041-450-8289",
-    dogPolicy: {
-      allowed: true,
-      sizeCategory: null,
-      note: "가능",
-    },
-    facilities: ["전기", "무선인터넷", "장작판매", "온수", "마트.편의점"],
-  },
-  {
-    id: "gocamping-101464",
-    name: "어게인 스쿨",
-    region: "강원도 횡성군",
-    address: "강원특별자치도 횡성군 강림면 주천강로 488",
-    phone: "070-4159-0070",
-    dogPolicy: {
-      allowed: true,
-      sizeCategory: "SMALL",
-      note: "가능(소형견)",
-    },
-    facilities: [],
-  },
-  {
-    id: "gocamping-7561",
-    name: "와우파크",
-    region: "강원도 강릉시",
-    address: "강원 강릉시 사천면 공회당길 7-13",
-    phone: "033-651-0202",
-    mainImageUrl: "https://gocamping.or.kr/upload/camp/7561/thumb/thumb_720_8787Mp6FrOMIdBwHnCc2QIk5.jpg",
-    externalUrl: "http://wawoopark.co.kr/",
-    dogPolicy: {
-      allowed: true,
-      sizeCategory: null,
-      note: "가능",
-    },
-    facilities: [],
-  },
-  {
-    id: "gocamping-100298",
-    name: "캠핑808",
-    region: "충청북도 충주시",
-    address: "충북 충주시 동량면 미라실로 689-1",
-    phone: "010-4474-8089",
-    mainImageUrl: "https://gocamping.or.kr/upload/camp/100298/thumb/thumb_720_200701XcWJ7LMwvso2JHho5s.jpg",
-    externalUrl: "https://camping808.com",
-    dogPolicy: {
-      allowed: true,
-      sizeCategory: "SMALL",
-      note: "가능(소형견)",
-    },
-    facilities: [],
-  },
-  {
-    id: "test-campsite-1",
-    name: "반려견 천국 캠핑장",
-    region: "경기도 가평군",
-    address: "경기도 가평군 북면 백둔로 123",
-    phone: "031-123-4567",
-    mainImageUrl: "https://example.com/image.jpg",
-    externalUrl: "https://example.com/camping",
-    dogPolicy: {
-      allowed: true,
-      sizeCategory: "MEDIUM",
-      note: "소형견, 중형견 가능. 대형견은 사전 문의 필요.",
-    },
-    facilities: [],
-  },
-];
+// 실제 DB에서 캠핑장 데이터 가져오기
+async function getCampsites() {
+  try {
+    const campsites = await prisma.campsite.findMany({
+      where: {
+        dogPolicy: {
+          allowed: true, // 반려견 가능한 캠핑장만
+        },
+      },
+      include: {
+        dogPolicy: true,
+        facilities: {
+          include: {
+            facility: true,
+          },
+        },
+      },
+      orderBy: {
+        name: "asc",
+      },
+      take: 50, // 최대 50개
+    });
+
+    return campsites.map((campsite) => ({
+      id: campsite.id,
+      name: campsite.name,
+      region: campsite.address?.split(" ").slice(0, 2).join(" ") || "",
+      address: campsite.address || "",
+      phone: campsite.phone || "",
+      mainImageUrl: campsite.mainImageUrl || "",
+      externalUrl: campsite.externalUrl || "",
+      dogPolicy: {
+        allowed: campsite.dogPolicy?.allowed || false,
+        sizeCategory: campsite.dogPolicy?.sizeCategory || null,
+        note: campsite.dogPolicy?.note || "",
+      },
+      facilities: campsite.facilities.map((cf) => cf.facility.name),
+    }));
+  } catch (error) {
+    console.error("Failed to fetch campsites:", error);
+    return [];
+  }
+}
 
 function getDogSizeBadge(sizeCategory: string | null) {
   if (!sizeCategory) return <Badge variant="secondary">전체</Badge>;
@@ -116,7 +71,8 @@ function getDogSizeBadge(sizeCategory: string | null) {
   return <Badge variant="secondary">{sizeCategory}</Badge>;
 }
 
-export default function SearchPage() {
+export default async function SearchPage() {
+  const campsites = await getCampsites();
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-amber-50">
       {/* Header */}

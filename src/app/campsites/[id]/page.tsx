@@ -19,81 +19,54 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { notFound } from "next/navigation";
 
-// Mock data - 나중에 실제 DB에서 가져올 것
-function getCampsiteData(id: string) {
-  const data: any = {
-    "gocamping-100704": {
-      id: "gocamping-100704",
-      name: "옥당걸숲속관광농원",
-      region: "경상북도 김천시",
-      address: "경북 김천시 부항면 안간1길 700",
-      phone: "054-434-7773",
-      mainImageUrl:
-        "https://gocamping.or.kr/upload/camp/100704/thumb/thumb_720_3455yavJjzbNkRM0fR7yOVtb.jpg",
-      externalUrl: "http://옥당걸.kr",
-      dogPolicy: {
-        allowed: true,
-        sizeCategory: "SMALL",
-        note: "가능(소형견)",
-        maxCount: 1,
-        extraFee: 0,
+// 실제 DB에서 캠핑장 데이터 가져오기
+async function getCampsiteData(id: string) {
+  try {
+    const campsite = await prisma.campsite.findUnique({
+      where: { id },
+      include: {
+        dogPolicy: true,
+        facilities: {
+          include: {
+            facility: true,
+          },
+        },
       },
-      facilities: [
-        "전기",
-        "무선인터넷",
-        "장작판매",
-        "온수",
-        "트렘폴린",
-        "물놀이장",
-        "놀이터",
-        "산책로",
-        "운동시설",
-        "마트.편의점",
-        "식당",
-      ],
-      description:
-        "자연 속에서 힐링할 수 있는 아늑한 캠핑장입니다. 소형견과 함께 즐거운 시간을 보낼 수 있습니다.",
-      operationPeriod: "연중무휴",
-      checkIn: "14:00",
-      checkOut: "11:00",
-      capacity: 50,
-    },
-    "test-campsite-1": {
-      id: "test-campsite-1",
-      name: "반려견 천국 캠핑장",
-      region: "경기도 가평군",
-      address: "경기도 가평군 북면 백둔로 123",
-      phone: "031-123-4567",
-      mainImageUrl: "https://example.com/image.jpg",
-      externalUrl: "https://example.com/camping",
-      dogPolicy: {
-        allowed: true,
-        sizeCategory: "MEDIUM",
-        note: "소형견, 중형견 가능. 대형견은 사전 문의 필요.",
-        maxCount: 2,
-        extraFee: 10000,
-      },
-      facilities: ["전기", "온수", "샤워실", "화장실", "마트.편의점"],
-      description:
-        "반려견 전용 운동장과 산책로가 마련된 최고의 펫프렌들리 캠핑장입니다.",
-      operationPeriod: "3월~11월",
-      checkIn: "15:00",
-      checkOut: "12:00",
-      capacity: 30,
-    },
-  };
+    });
 
-  return (
-    data[id] || {
-      id,
-      name: "캠핑장을 찾을 수 없습니다",
-      region: "-",
-      address: "-",
-      dogPolicy: { allowed: false },
-      facilities: [],
+    if (!campsite) {
+      return null;
     }
-  );
+
+    return {
+      id: campsite.id,
+      name: campsite.name,
+      region: campsite.address?.split(" ").slice(0, 2).join(" ") || "",
+      address: campsite.address || "",
+      phone: campsite.phone || "",
+      mainImageUrl: campsite.mainImageUrl || "",
+      externalUrl: campsite.externalUrl || "",
+      dogPolicy: {
+        allowed: campsite.dogPolicy?.allowed || false,
+        sizeCategory: campsite.dogPolicy?.sizeCategory || null,
+        note: campsite.dogPolicy?.note || "",
+        maxCount: campsite.dogPolicy?.maxDogs || null,
+        extraFee: campsite.dogPolicy?.extraFee || null,
+      },
+      facilities: campsite.facilities.map((cf) => cf.facility.name),
+      description: campsite.intro || "",
+      operationPeriod: "연중무휴", // TODO: DB에 필드 추가 필요
+      checkIn: "14:00", // TODO: DB에 필드 추가 필요
+      checkOut: "11:00", // TODO: DB에 필드 추가 필요
+      capacity: 50, // TODO: DB에 필드 추가 필요
+    };
+  } catch (error) {
+    console.error("Failed to fetch campsite:", error);
+    return null;
+  }
 }
 
 function getDogSizeBadge(sizeCategory: string | null) {
@@ -109,12 +82,16 @@ function getDogSizeBadge(sizeCategory: string | null) {
   return <Badge variant="secondary">{sizeCategory}</Badge>;
 }
 
-export default function CampsiteDetailPage({
+export default async function CampsiteDetailPage({
   params,
 }: {
   params: { id: string };
 }) {
-  const campsite = getCampsiteData(params.id);
+  const campsite = await getCampsiteData(params.id);
+
+  if (!campsite) {
+    notFound();
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-amber-50">
