@@ -1,28 +1,35 @@
 import { Button } from "@/components/ui/button";
 import { Tent } from "lucide-react";
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import CampsiteList from "@/components/CampsiteList";
 
 // 실제 DB에서 캠핑장 데이터 가져오기
 async function getCampsites() {
   try {
-    const campsites = await prisma.campsite.findMany({
-      include: {
-        dogPolicy: true,
-        facilities: {
-          include: {
-            facility: true,
-          },
-        },
-      },
-      orderBy: {
-        name: "asc",
-      },
-      take: 100, // 최대 100개
-    });
+    // Supabase 클라이언트를 사용하여 캠핑장 데이터 가져오기
+    const { data: campsites, error } = await supabase
+      .from('Campsite')
+      .select(`
+        *,
+        dogPolicy:DogPolicy(*),
+        facilities:CampsiteFacility(
+          facilityTag:FacilityTag(*)
+        )
+      `)
+      .order('name', { ascending: true })
+      .limit(100);
 
-    return campsites.map((campsite) => ({
+    if (error) {
+      console.error("Supabase query error:", error);
+      return [];
+    }
+
+    if (!campsites) {
+      return [];
+    }
+
+    return campsites.map((campsite: any) => ({
       id: campsite.id,
       name: campsite.name,
       region: campsite.address?.split(" ").slice(0, 2).join(" ") || "",
@@ -35,7 +42,7 @@ async function getCampsites() {
         sizeCategory: campsite.dogPolicy?.sizeCategory || null,
         note: campsite.dogPolicy?.note || "",
       },
-      facilities: campsite.facilities.map((cf) => cf.facility.name),
+      facilities: campsite.facilities?.map((cf: any) => cf.facilityTag?.name).filter(Boolean) || [],
     }));
   } catch (error) {
     console.error("Failed to fetch campsites:", error);

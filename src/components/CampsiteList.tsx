@@ -20,7 +20,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { MapPin, Dog, Phone, ExternalLink } from "lucide-react";
+import { MapPin, Dog, Phone, ExternalLink, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -45,6 +45,8 @@ interface Campsite {
 interface CampsiteListProps {
   campsites: Campsite[];
 }
+
+const ITEMS_PER_PAGE = 12; // 페이지당 아이템 수
 
 function getDogSizeBadge(sizeCategory: string | null) {
   if (!sizeCategory) return <Badge variant="secondary">전체</Badge>;
@@ -73,6 +75,9 @@ export default function CampsiteList({ campsites }: CampsiteListProps) {
   );
   const [showOnlyDogFriendly, setShowOnlyDogFriendly] = useState<boolean>(
     searchParams.get("dogOnly") === "true"
+  );
+  const [currentPage, setCurrentPage] = useState<number>(
+    parseInt(searchParams.get("page") || "1")
   );
 
   // 지역 목록 추출
@@ -125,11 +130,34 @@ export default function CampsiteList({ campsites }: CampsiteListProps) {
     return filtered;
   }, [campsites, selectedRegion, selectedDogSize, sortBy, showOnlyDogFriendly]);
 
+  // 페이지네이션 계산
+  const totalPages = Math.ceil(filteredCampsites.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedCampsites = filteredCampsites.slice(startIndex, endIndex);
+
+  // 페이지 범위 계산 (최대 5개 버튼 표시)
+  const getPageRange = () => {
+    const range = [];
+    const maxButtons = 5;
+    let start = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let end = Math.min(totalPages, start + maxButtons - 1);
+
+    if (end - start < maxButtons - 1) {
+      start = Math.max(1, end - maxButtons + 1);
+    }
+
+    for (let i = start; i <= end; i++) {
+      range.push(i);
+    }
+    return range;
+  };
+
   // URL 업데이트
   const updateURL = (params: Record<string, string>) => {
     const newParams = new URLSearchParams(searchParams.toString());
     Object.entries(params).forEach(([key, value]) => {
-      if (value === "all" || value === "false") {
+      if (value === "all" || value === "false" || value === "1") {
         newParams.delete(key);
       } else {
         newParams.set(key, value);
@@ -141,27 +169,64 @@ export default function CampsiteList({ campsites }: CampsiteListProps) {
   // 필터 변경 핸들러
   const handleRegionChange = (value: string) => {
     setSelectedRegion(value);
-    updateURL({ region: value, dogSize: selectedDogSize, sort: sortBy });
+    setCurrentPage(1); // 필터 변경 시 첫 페이지로
+    updateURL({ 
+      region: value, 
+      dogSize: selectedDogSize, 
+      sort: sortBy,
+      dogOnly: showOnlyDogFriendly.toString(),
+      page: "1"
+    });
   };
 
   const handleDogSizeChange = (value: string) => {
     setSelectedDogSize(value);
-    updateURL({ region: selectedRegion, dogSize: value, sort: sortBy });
+    setCurrentPage(1);
+    updateURL({ 
+      region: selectedRegion, 
+      dogSize: value, 
+      sort: sortBy,
+      dogOnly: showOnlyDogFriendly.toString(),
+      page: "1"
+    });
   };
 
   const handleSortChange = (value: string) => {
     setSortBy(value);
-    updateURL({ region: selectedRegion, dogSize: selectedDogSize, sort: value });
+    setCurrentPage(1);
+    updateURL({ 
+      region: selectedRegion, 
+      dogSize: selectedDogSize, 
+      sort: value,
+      dogOnly: showOnlyDogFriendly.toString(),
+      page: "1"
+    });
   };
 
   const handleDogOnlyToggle = (checked: boolean) => {
     setShowOnlyDogFriendly(checked);
+    setCurrentPage(1);
     updateURL({
       region: selectedRegion,
       dogSize: selectedDogSize,
       sort: sortBy,
       dogOnly: checked.toString(),
+      page: "1"
     });
+  };
+
+  // 페이지 변경 핸들러
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    updateURL({
+      region: selectedRegion,
+      dogSize: selectedDogSize,
+      sort: sortBy,
+      dogOnly: showOnlyDogFriendly.toString(),
+      page: page.toString()
+    });
+    // 페이지 상단으로 스크롤
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   // 필터 초기화
@@ -170,6 +235,7 @@ export default function CampsiteList({ campsites }: CampsiteListProps) {
     setSelectedDogSize("all");
     setSortBy("name");
     setShowOnlyDogFriendly(false);
+    setCurrentPage(1);
     router.push("/search", { scroll: false });
   };
 
@@ -289,6 +355,11 @@ export default function CampsiteList({ campsites }: CampsiteListProps) {
             </h2>
             <p className="mt-1 text-sm text-slate-600">
               총 <span className="font-semibold text-green-600">{filteredCampsites.length}</span>개의 캠핑장
+              {totalPages > 1 && (
+                <span className="ml-2 text-slate-500">
+                  ({currentPage} / {totalPages} 페이지)
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -315,7 +386,7 @@ export default function CampsiteList({ campsites }: CampsiteListProps) {
 
         {/* Campsite Cards */}
         <div className="grid gap-6 md:grid-cols-2">
-          {filteredCampsites.map((campsite) => (
+          {paginatedCampsites.map((campsite) => (
             <Card
               key={campsite.id}
               className="overflow-hidden transition-shadow hover:shadow-lg"
@@ -426,6 +497,85 @@ export default function CampsiteList({ campsites }: CampsiteListProps) {
             </Card>
           ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-8 flex items-center justify-center gap-2">
+            {/* Previous Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="h-10 w-10"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+
+            {/* First Page */}
+            {getPageRange()[0] > 1 && (
+              <>
+                <Button
+                  variant={currentPage === 1 ? "default" : "outline"}
+                  onClick={() => handlePageChange(1)}
+                  className={currentPage === 1 ? "bg-green-600 hover:bg-green-700" : ""}
+                >
+                  1
+                </Button>
+                {getPageRange()[0] > 2 && (
+                  <span className="px-2 text-slate-400">...</span>
+                )}
+              </>
+            )}
+
+            {/* Page Numbers */}
+            {getPageRange().map((page) => (
+              <Button
+                key={page}
+                variant={currentPage === page ? "default" : "outline"}
+                onClick={() => handlePageChange(page)}
+                className={
+                  currentPage === page
+                    ? "bg-green-600 hover:bg-green-700"
+                    : ""
+                }
+              >
+                {page}
+              </Button>
+            ))}
+
+            {/* Last Page */}
+            {getPageRange()[getPageRange().length - 1] < totalPages && (
+              <>
+                {getPageRange()[getPageRange().length - 1] < totalPages - 1 && (
+                  <span className="px-2 text-slate-400">...</span>
+                )}
+                <Button
+                  variant={currentPage === totalPages ? "default" : "outline"}
+                  onClick={() => handlePageChange(totalPages)}
+                  className={
+                    currentPage === totalPages
+                      ? "bg-green-600 hover:bg-green-700"
+                      : ""
+                  }
+                >
+                  {totalPages}
+                </Button>
+              </>
+            )}
+
+            {/* Next Button */}
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="h-10 w-10"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
