@@ -19,25 +19,27 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { supabase } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 
 // 실제 DB에서 캠핑장 데이터 가져오기
 async function getCampsiteData(id: string) {
   try {
-    const campsite = await prisma.campsite.findUnique({
-      where: { id },
-      include: {
-        dogPolicy: true,
-        facilities: {
-          include: {
-            facility: true,
-          },
-        },
-      },
-    });
+    // Supabase에서 캠핑장 데이터 조회
+    const { data: campsite, error } = await supabase
+      .from('Campsite')
+      .select(`
+        *,
+        dogPolicy:DogPolicy(*),
+        facilities:CampsiteFacility(
+          facilityTag:FacilityTag(*)
+        )
+      `)
+      .eq('id', id)
+      .single();
 
-    if (!campsite) {
+    if (error || !campsite) {
+      console.error("Failed to fetch campsite:", error);
       return null;
     }
 
@@ -56,7 +58,7 @@ async function getCampsiteData(id: string) {
         maxCount: campsite.dogPolicy?.maxDogs || null,
         extraFee: campsite.dogPolicy?.extraFee || null,
       },
-      facilities: campsite.facilities.map((cf) => cf.facility.name),
+      facilities: campsite.facilities?.map((cf: any) => cf.facilityTag.name) || [],
       description: campsite.intro || "",
       operationPeriod: "연중무휴", // TODO: DB에 필드 추가 필요
       checkIn: "14:00", // TODO: DB에 필드 추가 필요

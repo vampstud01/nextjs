@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { DogSize } from "@prisma/client";
+import { supabase } from "@/lib/supabase";
+
+type DogSize = "SMALL" | "MEDIUM" | "LARGE";
 
 // 검색 API
 // GET /api/search?region=...&date_from=...&date_to=...&dog_size=SMALL&dog_count=1
@@ -18,44 +19,68 @@ export async function GET(request: Request) {
   const dogCountNum = dogCount ? Number(dogCount) : undefined;
 
   try {
-    const campsites = await prisma.campsite.findMany({
-      where: {
-        ...(region && { region: { contains: region } }),
-        dogPolicy: {
-          ...(dogSize && { sizeCategory: dogSize }),
-          ...(dogCountNum && { maxDogs: { gte: dogCountNum } }),
-        },
-        ...(dateFromObj &&
-          dateToObj && {
-            availabilities: {
-              some: {
-                date: {
-                  gte: dateFromObj,
-                  lte: dateToObj,
-                },
-                isAvailable: true,
-              },
-            },
-          }),
-      },
-      include: {
-        dogPolicy: true,
-        availabilities: dateFromObj && dateToObj
-          ? {
-              where: {
-                date: {
-                  gte: dateFromObj,
-                  lte: dateToObj,
-                },
-              },
-              orderBy: { date: "asc" },
-            }
-          : false,
-      },
-      take: 50,
-    });
+    // Supabase 쿼리 빌더
+    let query = supabase
+      .from('Campsite')
+      .select(`
+        *,
+        dogPolicy:DogPolicy(*),
+        availabilities:Availability(*)
+      `)
+      .limit(50);
 
-    return NextResponse.json({ items: campsites });
+    // 지역 필터
+    if (region) {
+      query = query.ilike('region', `%${region}%`);
+    }
+
+    const { data: campsites, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    // 클라이언트 사이드 필터링 (Supabase의 제한 사항 때문)
+    let filteredCampsites = campsites || [];
+
+    // 반려견 정책 필터
+    if (dogSize || dogCountNum) {
+      filteredCampsites = filteredCampsites.filter(campsite => {
+        const policy = campsite.dogPolicy;
+        if (!policy) return false;
+
+        if (dogSize && policy.sizeCategory !== dogSize) return false;
+        if (dogCountNum && policy.maxDogs && policy.maxDogs < dogCountNum) return false;
+
+        return true;
+      });
+    }
+
+    // 날짜별 가용성 필터
+    if (dateFromObj && dateToObj) {
+      filteredCampsites = filteredCampsites.filter(campsite => {
+        const availabilities = campsite.availabilities || [];
+        return availabilities.some((avail: any) => {
+          const availDate = new Date(avail.date);
+          return availDate >= dateFromObj && 
+                 availDate <= dateToObj && 
+                 avail.isAvailable;
+        });
+      });
+
+      // 날짜 범위 내의 가용성만 포함
+      filteredCampsites = filteredCampsites.map(campsite => ({
+        ...campsite,
+        availabilities: campsite.availabilities?.filter((avail: any) => {
+          const availDate = new Date(avail.date);
+          return availDate >= dateFromObj && availDate <= dateToObj;
+        }).sort((a: any, b: any) => 
+          new Date(a.date).getTime() - new Date(b.date).getTime()
+        )
+      }));
+    }
+
+    return NextResponse.json({ items: filteredCampsites });
   } catch (error) {
     console.error("Search API error", error);
     return NextResponse.json(
