@@ -7,9 +7,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tent, Plus, Edit, Trash2, ArrowLeft } from "lucide-react";
+import { Tent, Edit, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import AdminHeader from "@/components/AdminHeader";
 
 // 관리자 페이지용 캠핑장 데이터 가져오기
 async function getAdminCampsites() {
@@ -58,36 +59,7 @@ export default async function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/" className="flex items-center gap-2">
-                <Tent className="h-8 w-8 text-green-600" />
-                <h1 className="text-2xl font-bold text-slate-900">DogCamp</h1>
-              </Link>
-              <Badge variant="outline" className="border-orange-300 bg-orange-50 text-orange-700">
-                관리자
-              </Badge>
-            </div>
-            <nav className="flex items-center gap-4">
-              <Link href="/">
-                <Button variant="ghost">
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  홈으로
-                </Button>
-              </Link>
-              <Link href="/admin/new">
-                <Button className="bg-green-600 hover:bg-green-700">
-                  <Plus className="mr-2 h-4 w-4" />
-                  캠핑장 등록
-                </Button>
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </header>
+      <AdminHeader showAddButton={true} />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Page Title */}

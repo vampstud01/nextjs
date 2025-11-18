@@ -20,9 +20,10 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Tent, ArrowLeft, Save } from "lucide-react";
+import { Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import AdminHeader from "@/components/AdminHeader";
 
 export default function NewCampsitePage() {
   const router = useRouter();
@@ -78,23 +79,7 @@ export default function NewCampsitePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
-      {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between">
-            <Link href="/admin" className="flex items-center gap-2">
-              <Tent className="h-8 w-8 text-green-600" />
-              <h1 className="text-2xl font-bold text-slate-900">DogCamp Admin</h1>
-            </Link>
-            <Link href="/admin">
-              <Button variant="ghost">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                목록으로
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <AdminHeader />
 
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
