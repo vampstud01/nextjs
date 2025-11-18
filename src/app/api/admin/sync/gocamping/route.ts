@@ -33,6 +33,8 @@ export async function POST() {
   let itemsFailed = 0;
   let sourceSiteId: string | undefined;
   let crawlLogId: string | undefined;
+  let startIndex = 0; // 시작 인덱스
+  const batchSize = 100; // 한 번에 처리할 항목 수
 
   try {
     // Supabase Admin 클라이언트 가져오기
@@ -41,7 +43,7 @@ export async function POST() {
     // 1. SourceSite 조회 또는 생성
     const { data: existingSourceSite, error: findError } = await supabase
       .from("SourceSite")
-      .select("id")
+      .select("id, lastProcessedIndex")
       .eq("name", "고캠핑(공공데이터포털)")
       .single();
 
@@ -56,6 +58,7 @@ export async function POST() {
           baseUrl: API_URL,
           type: "JSON_API",
           enabled: true,
+          lastProcessedIndex: 0,
         })
         .select()
         .single();
@@ -71,9 +74,13 @@ export async function POST() {
         throw new Error("SourceSite 생성 실패: 데이터가 반환되지 않았습니다.");
       }
       sourceSiteId = newSourceSite.id;
+      startIndex = 0;
     } else {
       sourceSiteId = existingSourceSite.id;
+      startIndex = existingSourceSite.lastProcessedIndex || 0;
     }
+
+    console.log(`동기화 시작: ${startIndex}번째 항목부터 처리합니다.`);
 
     // 2. CrawlLog 생성
     const newCrawlLogId = createId();
@@ -97,8 +104,14 @@ export async function POST() {
       crawlLogId = crawlLog.id;
     }
 
-    // 3. GoCamping API 호출 - 전체 데이터 가져오기
-    // 먼저 첫 페이지를 가져와서 전체 개수 확인
+    // 3. GoCamping API 호출 - 필요한 범위만 가져오기
+    // 시작 페이지와 필요한 페이지 수 계산
+    const numOfRows = 100; // 한 페이지당 항목 수
+    const startPage = Math.floor(startIndex / numOfRows) + 1;
+    const startOffset = startIndex % numOfRows; // 페이지 내 시작 위치
+    const endIndex = startIndex + batchSize; // 처리할 마지막 인덱스
+
+    // 먼저 전체 개수 확인 (첫 페이지만 호출)
     const firstPageUrl = `${API_URL}?serviceKey=${API_KEY}&numOfRows=100&pageNo=1&MobileOS=ETC&MobileApp=DogCamp&_type=json`;
     const firstPageResponse = await fetch(firstPageUrl);
     const firstPageData = await firstPageResponse.json();
@@ -112,22 +125,31 @@ export async function POST() {
       throw new Error("API 응답에 데이터가 없습니다.");
     }
 
-    // 전체 데이터 수집
-    const allItems: GoCampingItem[] = [];
-    const numOfRows = 100; // 한 페이지당 항목 수
-    const totalPages = Math.ceil(totalCount / numOfRows);
-
-    console.log(`전체 ${totalCount}개 항목, ${totalPages}페이지를 가져옵니다...`);
-
-    // 첫 페이지 데이터 추가
-    const firstPageItems =
-      firstPageData?.response?.body?.items?.item || [];
-    if (Array.isArray(firstPageItems)) {
-      allItems.push(...firstPageItems);
+    // 시작 인덱스가 전체 개수를 초과하면 동기화 완료
+    if (startIndex >= totalCount) {
+      console.log(`모든 데이터를 처리했습니다. (${startIndex}/${totalCount})`);
+      return NextResponse.json({
+        success: true,
+        message: "모든 데이터를 처리했습니다.",
+        itemsProcessed: 0,
+        itemsCreated: 0,
+        itemsUpdated: 0,
+        itemsFailed: 0,
+      });
     }
 
-    // 나머지 페이지들 가져오기
-    for (let pageNo = 2; pageNo <= totalPages; pageNo++) {
+    // 필요한 페이지 범위 계산
+    const endPage = Math.ceil(endIndex / numOfRows);
+    const actualEndIndex = Math.min(endIndex, totalCount);
+
+    console.log(
+      `처리 범위: ${startIndex}번째 ~ ${actualEndIndex - 1}번째 항목 (총 ${totalCount}개 중)`
+    );
+    console.log(`필요한 페이지: ${startPage} ~ ${endPage}`);
+
+    // 필요한 페이지들 가져오기
+    const allItems: GoCampingItem[] = [];
+    for (let pageNo = startPage; pageNo <= endPage; pageNo++) {
       const pageUrl = `${API_URL}?serviceKey=${API_KEY}&numOfRows=${numOfRows}&pageNo=${pageNo}&MobileOS=ETC&MobileApp=DogCamp&_type=json`;
       const pageResponse = await fetch(pageUrl);
       const pageData = await pageResponse.json();
@@ -135,22 +157,25 @@ export async function POST() {
       const pageItems = pageData?.response?.body?.items?.item || [];
       if (Array.isArray(pageItems)) {
         allItems.push(...pageItems);
-        console.log(`페이지 ${pageNo}/${totalPages} 완료 (${allItems.length}/${totalCount}개 수집)`);
+        console.log(`페이지 ${pageNo} 완료 (${allItems.length}개 수집)`);
       }
 
       // API 호출 제한을 고려한 짧은 대기
-      if (pageNo < totalPages) {
+      if (pageNo < endPage) {
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
 
-    const items = allItems;
+    // 시작 인덱스부터 필요한 만큼만 슬라이스
+    const items = allItems.slice(startOffset, startOffset + batchSize);
 
     if (!Array.isArray(items) || items.length === 0) {
-      throw new Error("API 응답에 데이터가 없습니다.");
+      throw new Error("처리할 데이터가 없습니다.");
     }
 
-    console.log(`총 ${items.length}개 항목을 가져왔습니다. 처리 시작...`);
+    console.log(
+      `총 ${items.length}개 항목을 가져왔습니다. (${startIndex}번째부터 시작)`
+    );
 
     // 4. 각 캠핑장 처리
     for (const item of items) {
@@ -272,18 +297,32 @@ export async function POST() {
       }
     }
 
-    // 5. CrawlLog 업데이트 (성공)
+    // 5. 처리 완료 후 상태 업데이트
+    const newLastProcessedIndex = startIndex + itemsProcessed;
+    const isComplete = newLastProcessedIndex >= totalCount;
+
+    // SourceSite의 lastProcessedIndex 업데이트
+    await supabase
+      .from("SourceSite")
+      .update({
+        lastProcessedIndex: newLastProcessedIndex,
+      })
+      .eq("id", sourceSiteId);
+
+    // CrawlLog 업데이트 (성공)
     if (crawlLogId) {
       await supabase
         .from("CrawlLog")
         .update({
-          status: "SUCCESS",
+          status: isComplete ? "SUCCESS" : "SUCCESS",
           completedAt: new Date().toISOString(),
           itemsProcessed,
           itemsCreated,
           itemsUpdated,
           itemsFailed,
-          message: `성공적으로 동기화 완료`,
+          message: isComplete
+            ? `모든 데이터 동기화 완료 (${newLastProcessedIndex}/${totalCount})`
+            : `부분 동기화 완료 (${newLastProcessedIndex}/${totalCount}, 다음 실행 시 ${newLastProcessedIndex}번째부터 계속)`,
         })
         .eq("id", crawlLogId);
     }
@@ -294,6 +333,12 @@ export async function POST() {
       itemsCreated,
       itemsUpdated,
       itemsFailed,
+      lastProcessedIndex: newLastProcessedIndex,
+      totalCount,
+      isComplete,
+      message: isComplete
+        ? "모든 데이터 동기화가 완료되었습니다."
+        : `부분 동기화 완료. 다음 실행 시 ${newLastProcessedIndex}번째 항목부터 계속됩니다.`,
     });
   } catch (error: any) {
     console.error("Sync error:", error);
@@ -303,6 +348,25 @@ export async function POST() {
       details: error.details,
       hint: error.hint,
     });
+
+    // 처리된 항목이 있다면 lastProcessedIndex 업데이트
+    if (sourceSiteId && itemsProcessed > 0) {
+      try {
+        const supabase = getSupabaseAdmin();
+        const newLastProcessedIndex = startIndex + itemsProcessed;
+        
+        await supabase
+          .from("SourceSite")
+          .update({
+            lastProcessedIndex: newLastProcessedIndex,
+          })
+          .eq("id", sourceSiteId);
+        
+        console.log(`에러 발생 전까지 ${itemsProcessed}개 처리 완료. lastProcessedIndex를 ${newLastProcessedIndex}로 업데이트했습니다.`);
+      } catch (updateError) {
+        console.error("Failed to update lastProcessedIndex:", updateError);
+      }
+    }
 
     // CrawlLog가 생성되었다면 실패 상태로 업데이트
     if (crawlLogId) {
@@ -332,6 +396,9 @@ export async function POST() {
         itemsCreated,
         itemsUpdated,
         itemsFailed,
+        message: itemsProcessed > 0
+          ? `에러 발생 전까지 ${itemsProcessed}개 처리 완료. 다음 실행 시 이어서 진행됩니다.`
+          : undefined,
       },
       { status: 500 }
     );
