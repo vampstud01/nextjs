@@ -11,69 +11,71 @@ datasource db {
 }
 
 model Campsite {
-  id            String          @id @default(cuid())
-  name          String
-  address       String
-  region        String          // 예: "경기도 가평군"
-  latitude      Float?
-  longitude     Float?
-  phone         String?
-  mainImageUrl  String?
-  externalUrl   String?         // 외부 예약 링크
+  id           String  @id @default(cuid())
+  externalId   String? @unique // 외부 API ID (예: gocamping-100704)
+  name         String
+  address      String
+  region       String? // 예: "경기도 가평군"
+  latitude     Float?
+  longitude    Float?
+  phone        String?
+  mainImageUrl String?
+  externalUrl  String? // 외부 예약 링크
+  intro        String? // 소개글
 
-  sourceSiteId  String?
-  sourceSite    SourceSite?     @relation(fields: [sourceSiteId], references: [id])
+  sourceSiteId String?
+  sourceSite   SourceSite? @relation(fields: [sourceSiteId], references: [id])
 
-  dogPolicy     DogPolicy?
+  dogPolicy      DogPolicy?
   availabilities Availability[]
-  facilities    CampsiteFacility[]
+  facilities     CampsiteFacility[]
 
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // 애완견 관련 정책
 model DogPolicy {
-  id             String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  campsiteId     String   @unique
-  campsite       Campsite @relation(fields: [campsiteId], references: [id])
+  campsiteId String   @unique
+  campsite   Campsite @relation(fields: [campsiteId], references: [id])
 
-  allowed        Boolean  @default(true)
+  allowed Boolean @default(true)
 
-  sizeMinKg      Float?   // 허용 최소 체중
-  sizeMaxKg      Float?   // 허용 최대 체중
-  sizeCategory   DogSize? // 소형/중형/대형 등 enum
+  sizeMinKg    Float? // 허용 최소 체중
+  sizeMaxKg    Float? // 허용 최대 체중
+  sizeCategory DogSize? // 소형/중형/대형 등 enum
 
-  maxDogs        Int?     // 최대 마리 수
-  extraFee       Int?     // 추가 요금(원)
+  maxDogs  Int? // 최대 마리 수
+  extraFee Int? // 추가 요금(원)
 
-  indoorAllowed  Boolean? // 실내 동반 가능 여부
-  outdoorOnly    Boolean? // 실외만 가능 여부
+  indoorAllowed Boolean? // 실내 동반 가능 여부
+  outdoorOnly   Boolean? // 실외만 가능 여부
 
-  note           String?  // 정책 상세 설명(자유 텍스트)
+  note String? // 정책 상세 설명(자유 텍스트)
 }
 
 // 날짜별 예약 가능 여부
 model Availability {
-  id             String    @id @default(cuid())
+  id String @id @default(cuid())
 
-  campsiteId     String
-  campsite       Campsite  @relation(fields: [campsiteId], references: [id])
+  campsiteId String
+  campsite   Campsite @relation(fields: [campsiteId], references: [id])
 
-  date           DateTime
-  isAvailable    Boolean
+  date        DateTime
+  isAvailable Boolean
 
-  minStayNights  Int?      // 최소 숙박일
-  basePriceFrom  Int?      // 해당 날짜 기준 최저가
+  minStayNights Int? // 최소 숙박일
+  basePriceFrom Int? // 해당 날짜 기준 최저가
 
   @@index([campsiteId, date])
 }
 
 // 편의시설 태그
 model FacilityTag {
-  id      String   @id @default(cuid())
-  name    String   @unique
+  id   String @id @default(cuid())
+  name String @unique
 
   campsites CampsiteFacility[]
 }
@@ -83,19 +85,19 @@ model CampsiteFacility {
   campsiteId    String
   facilityTagId String
 
-  campsite      Campsite    @relation(fields: [campsiteId], references: [id])
-  facilityTag   FacilityTag @relation(fields: [facilityTagId], references: [id])
+  campsite    Campsite    @relation(fields: [campsiteId], references: [id])
+  facilityTag FacilityTag @relation(fields: [facilityTagId], references: [id])
 
   @@id([campsiteId, facilityTagId])
 }
 
 // 크롤링 대상 사이트
 model SourceSite {
-  id        String       @id @default(cuid())
-  name      String
-  baseUrl   String
-  type      SourceType   // HTML, JSON_API 등
-  enabled   Boolean      @default(true)
+  id      String     @id @default(cuid())
+  name    String
+  baseUrl String
+  type    SourceType // HTML, JSON_API 등
+  enabled Boolean    @default(true)
 
   campsites Campsite[]
   crawlLogs CrawlLog[]
@@ -103,16 +105,16 @@ model SourceSite {
 
 // 크롤링 로그
 model CrawlLog {
-  id              String     @id @default(cuid())
-  sourceSiteId    String
-  sourceSite      SourceSite @relation(fields: [sourceSiteId], references: [id])
+  id           String     @id @default(cuid())
+  sourceSiteId String
+  sourceSite   SourceSite @relation(fields: [sourceSiteId], references: [id])
 
-  startedAt       DateTime   @default(now())
-  finishedAt      DateTime?
-  status          CrawlStatus
-  newItemsCount   Int        @default(0)
-  updatedItemsCount Int      @default(0)
-  errorMessage    String?
+  startedAt         DateTime    @default(now())
+  finishedAt        DateTime?
+  status            CrawlStatus
+  newItemsCount     Int         @default(0)
+  updatedItemsCount Int         @default(0)
+  errorMessage      String?
 }
 
 // 애완견 크기 카테고리
@@ -135,5 +137,3 @@ enum CrawlStatus {
   SUCCESS
   FAILED
 }
-
-

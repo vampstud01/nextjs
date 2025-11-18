@@ -2,9 +2,9 @@
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tent, ArrowLeft, Plus, LogOut } from "lucide-react";
+import { Tent, ArrowLeft, Plus, LogOut, RefreshCw, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase-auth";
 import { useState } from "react";
 
@@ -14,6 +14,7 @@ interface AdminHeaderProps {
 
 export default function AdminHeader({ showAddButton = false }: AdminHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
@@ -49,16 +50,34 @@ export default function AdminHeader({ showAddButton = false }: AdminHeaderProps)
               관리자
             </Badge>
           </div>
-          <nav className="flex items-center gap-4">
+          <nav className="flex items-center gap-2">
             <Link href="/">
-              <Button variant="ghost">
+              <Button variant="ghost" size="sm">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 홈으로
               </Button>
             </Link>
+            <Link href="/admin">
+              <Button 
+                variant={pathname === "/admin" ? "secondary" : "ghost"} 
+                size="sm"
+              >
+                <LayoutDashboard className="mr-2 h-4 w-4" />
+                대시보드
+              </Button>
+            </Link>
+            <Link href="/admin/sync">
+              <Button 
+                variant={pathname === "/admin/sync" ? "secondary" : "ghost"} 
+                size="sm"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                동기화
+              </Button>
+            </Link>
             {showAddButton && (
               <Link href="/admin/new">
-                <Button className="bg-green-600 hover:bg-green-700">
+                <Button className="bg-green-600 hover:bg-green-700" size="sm">
                   <Plus className="mr-2 h-4 w-4" />
                   캠핑장 등록
                 </Button>
@@ -66,6 +85,7 @@ export default function AdminHeader({ showAddButton = false }: AdminHeaderProps)
             )}
             <Button
               variant="outline"
+              size="sm"
               onClick={handleLogout}
               disabled={isLoggingOut}
               className="text-red-600 hover:bg-red-50 hover:text-red-700"
