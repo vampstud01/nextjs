@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 // GoCamping API 키
 const API_KEY = process.env.GOCAMPING_API_KEY;
@@ -30,20 +30,23 @@ export async function POST() {
   let itemsCreated = 0;
   let itemsUpdated = 0;
   let itemsFailed = 0;
+  let sourceSiteId: string | undefined;
+  let crawlLogId: string | undefined;
 
   try {
+    // Supabase Admin 클라이언트 가져오기
+    const supabase = getSupabaseAdmin();
+
     // 1. SourceSite 조회 또는 생성
-    const { data: existingSourceSite, error: findError } = await supabaseAdmin
+    const { data: existingSourceSite, error: findError } = await supabase
       .from("SourceSite")
       .select("id")
       .eq("name", "고캠핑(공공데이터포털)")
       .single();
 
-    let sourceSiteId: string;
-
     if (findError || !existingSourceSite) {
       // SourceSite가 없으면 생성
-      const { data: newSourceSite, error: createError } = await supabaseAdmin
+      const { data: newSourceSite, error: createError } = await supabase
         .from("SourceSite")
         .insert({
           name: "고캠핑(공공데이터포털)",
@@ -54,8 +57,15 @@ export async function POST() {
         .select()
         .single();
 
-      if (createError || !newSourceSite) {
-        throw new Error("SourceSite 생성 실패");
+      if (createError) {
+        console.error("SourceSite 생성 에러 상세:", createError);
+        throw new Error(
+          `SourceSite 생성 실패: ${createError.message || JSON.stringify(createError)}`
+        );
+      }
+
+      if (!newSourceSite) {
+        throw new Error("SourceSite 생성 실패: 데이터가 반환되지 않았습니다.");
       }
       sourceSiteId = newSourceSite.id;
     } else {
@@ -63,7 +73,7 @@ export async function POST() {
     }
 
     // 2. CrawlLog 생성
-    const { data: crawlLog, error: logError } = await supabaseAdmin
+    const { data: crawlLog, error: logError } = await supabase
       .from("CrawlLog")
       .insert({
         sourceSiteId: sourceSiteId,
@@ -76,6 +86,10 @@ export async function POST() {
     if (logError) {
       console.error("CrawlLog 생성 에러:", logError);
       throw new Error("CrawlLog 생성 실패: " + logError.message);
+    }
+
+    if (crawlLog) {
+      crawlLogId = crawlLog.id;
     }
 
     // 3. GoCamping API 호출 (페이지 1만 가져오기 - 데모용)
@@ -100,7 +114,7 @@ export async function POST() {
         const externalId = `gocamping-${item.contentId}`;
 
         // 기존 캠핑장 확인
-        const { data: existing } = await supabaseAdmin
+        const { data: existing } = await supabase
           .from("Campsite")
           .select("id")
           .eq("externalId", externalId)
@@ -121,7 +135,7 @@ export async function POST() {
 
         if (existing) {
           // 업데이트
-          const { error: updateError } = await supabaseAdmin
+          const { error: updateError } = await supabase
             .from("Campsite")
             .update({
               name: item.facltNm || "",
@@ -138,14 +152,14 @@ export async function POST() {
           }
 
           // DogPolicy 업데이트
-          const { data: existingPolicy } = await supabaseAdmin
+          const { data: existingPolicy } = await supabase
             .from("DogPolicy")
             .select("id")
             .eq("campsiteId", existing.id)
             .single();
 
           if (existingPolicy) {
-            await supabaseAdmin
+            await supabase
               .from("DogPolicy")
               .update({
                 allowed: dogAllowed,
@@ -154,7 +168,7 @@ export async function POST() {
               })
               .eq("id", existingPolicy.id);
           } else if (dogAllowed) {
-            await supabaseAdmin.from("DogPolicy").insert({
+            await supabase.from("DogPolicy").insert({
               campsiteId: existing.id,
               allowed: dogAllowed,
               sizeCategory: dogSizeCategory,
@@ -165,7 +179,7 @@ export async function POST() {
           itemsUpdated++;
         } else {
           // 생성
-          const { data: newCampsite, error: createError } = await supabaseAdmin
+          const { data: newCampsite, error: createError } = await supabase
             .from("Campsite")
             .insert({
               externalId,
@@ -185,7 +199,7 @@ export async function POST() {
 
           // DogPolicy 생성
           if (dogAllowed && newCampsite) {
-            await supabaseAdmin.from("DogPolicy").insert({
+            await supabase.from("DogPolicy").insert({
               campsiteId: newCampsite.id,
               allowed: dogAllowed,
               sizeCategory: dogSizeCategory,
@@ -202,18 +216,20 @@ export async function POST() {
     }
 
     // 5. CrawlLog 업데이트 (성공)
-    await supabaseAdmin
-      .from("CrawlLog")
-      .update({
-        status: "SUCCESS",
-        completedAt: new Date().toISOString(),
-        itemsProcessed,
-        itemsCreated,
-        itemsUpdated,
-        itemsFailed,
-        message: `성공적으로 동기화 완료`,
-      })
-      .eq("id", crawlLog.id);
+    if (crawlLogId) {
+      await supabase
+        .from("CrawlLog")
+        .update({
+          status: "SUCCESS",
+          completedAt: new Date().toISOString(),
+          itemsProcessed,
+          itemsCreated,
+          itemsUpdated,
+          itemsFailed,
+          message: `성공적으로 동기화 완료`,
+        })
+        .eq("id", crawlLogId);
+    }
 
     return NextResponse.json({
       success: true,
@@ -224,6 +240,33 @@ export async function POST() {
     });
   } catch (error: any) {
     console.error("Sync error:", error);
+    console.error("Error details:", {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    });
+
+    // CrawlLog가 생성되었다면 실패 상태로 업데이트
+    if (crawlLogId) {
+      try {
+        const supabase = getSupabaseAdmin();
+        await supabase
+          .from("CrawlLog")
+          .update({
+            status: "FAILED",
+            completedAt: new Date().toISOString(),
+            itemsProcessed,
+            itemsCreated,
+            itemsUpdated,
+            itemsFailed,
+            message: error.message || "동기화 중 오류가 발생했습니다.",
+          })
+          .eq("id", crawlLogId);
+      } catch (logUpdateError) {
+        console.error("Failed to update CrawlLog:", logUpdateError);
+      }
+    }
 
     return NextResponse.json(
       {
