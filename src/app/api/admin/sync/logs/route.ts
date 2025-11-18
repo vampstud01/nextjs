@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET() {
   try {
-    const { data: logs, error } = await supabase
+    const { data: logs, error } = await supabaseAdmin
       .from("CrawlLog")
       .select("*")
       .order("startedAt", { ascending: false })

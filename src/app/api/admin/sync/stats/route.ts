@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET() {
   try {
     // 1. 전체 캠핑장 수
-    const { count: totalCampsites } = await supabase
+    const { count: totalCampsites } = await supabaseAdmin
       .from("Campsite")
       .select("*", { count: "exact", head: true });
 
     // 2. 마지막 동기화 날짜
-    const { data: lastSync } = await supabase
+    const { data: lastSync } = await supabaseAdmin
       .from("CrawlLog")
       .select("completedAt")
       .eq("status", "SUCCESS")
@@ -18,13 +18,13 @@ export async function GET() {
       .single();
 
     // 3. 성공한 동기화 수
-    const { count: successfulSyncs } = await supabase
+    const { count: successfulSyncs } = await supabaseAdmin
       .from("CrawlLog")
       .select("*", { count: "exact", head: true })
       .eq("status", "SUCCESS");
 
     // 4. 실패한 동기화 수
-    const { count: failedSyncs } = await supabase
+    const { count: failedSyncs } = await supabaseAdmin
       .from("CrawlLog")
       .select("*", { count: "exact", head: true })
       .eq("status", "FAILED");

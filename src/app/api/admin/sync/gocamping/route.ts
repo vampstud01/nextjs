@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 // GoCamping API 키
 const API_KEY = process.env.GOCAMPING_API_KEY;
@@ -33,7 +33,7 @@ export async function POST() {
 
   try {
     // 1. SourceSite 조회 또는 생성
-    const { data: existingSourceSite, error: findError } = await supabase
+    const { data: existingSourceSite, error: findError } = await supabaseAdmin
       .from("SourceSite")
       .select("id")
       .eq("name", "고캠핑(공공데이터포털)")
@@ -43,7 +43,7 @@ export async function POST() {
 
     if (findError || !existingSourceSite) {
       // SourceSite가 없으면 생성
-      const { data: newSourceSite, error: createError } = await supabase
+      const { data: newSourceSite, error: createError } = await supabaseAdmin
         .from("SourceSite")
         .insert({
           name: "고캠핑(공공데이터포털)",
@@ -63,7 +63,7 @@ export async function POST() {
     }
 
     // 2. CrawlLog 생성
-    const { data: crawlLog, error: logError } = await supabase
+    const { data: crawlLog, error: logError } = await supabaseAdmin
       .from("CrawlLog")
       .insert({
         sourceSiteId: sourceSiteId,
@@ -100,7 +100,7 @@ export async function POST() {
         const externalId = `gocamping-${item.contentId}`;
 
         // 기존 캠핑장 확인
-        const { data: existing } = await supabase
+        const { data: existing } = await supabaseAdmin
           .from("Campsite")
           .select("id")
           .eq("externalId", externalId)
@@ -121,7 +121,7 @@ export async function POST() {
 
         if (existing) {
           // 업데이트
-          const { error: updateError } = await supabase
+          const { error: updateError } = await supabaseAdmin
             .from("Campsite")
             .update({
               name: item.facltNm || "",
@@ -138,14 +138,14 @@ export async function POST() {
           }
 
           // DogPolicy 업데이트
-          const { data: existingPolicy } = await supabase
+          const { data: existingPolicy } = await supabaseAdmin
             .from("DogPolicy")
             .select("id")
             .eq("campsiteId", existing.id)
             .single();
 
           if (existingPolicy) {
-            await supabase
+            await supabaseAdmin
               .from("DogPolicy")
               .update({
                 allowed: dogAllowed,
@@ -154,7 +154,7 @@ export async function POST() {
               })
               .eq("id", existingPolicy.id);
           } else if (dogAllowed) {
-            await supabase.from("DogPolicy").insert({
+            await supabaseAdmin.from("DogPolicy").insert({
               campsiteId: existing.id,
               allowed: dogAllowed,
               sizeCategory: dogSizeCategory,
@@ -165,7 +165,7 @@ export async function POST() {
           itemsUpdated++;
         } else {
           // 생성
-          const { data: newCampsite, error: createError } = await supabase
+          const { data: newCampsite, error: createError } = await supabaseAdmin
             .from("Campsite")
             .insert({
               externalId,
@@ -185,7 +185,7 @@ export async function POST() {
 
           // DogPolicy 생성
           if (dogAllowed && newCampsite) {
-            await supabase.from("DogPolicy").insert({
+            await supabaseAdmin.from("DogPolicy").insert({
               campsiteId: newCampsite.id,
               allowed: dogAllowed,
               sizeCategory: dogSizeCategory,
@@ -202,7 +202,7 @@ export async function POST() {
     }
 
     // 5. CrawlLog 업데이트 (성공)
-    await supabase
+    await supabaseAdmin
       .from("CrawlLog")
       .update({
         status: "SUCCESS",
