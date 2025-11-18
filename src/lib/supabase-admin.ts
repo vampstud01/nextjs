@@ -24,6 +24,3 @@ export function getSupabaseAdmin() {
   })
 }
 
-// 하위 호환성을 위한 export
-export const supabaseAdmin = getSupabaseAdmin()
-
