@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,7 +14,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase-auth";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
@@ -160,6 +160,26 @@ export default function LoginPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-green-50 via-blue-50 to-amber-50 px-4">
+        <div className="w-full max-w-md">
+          <div className="mb-8 text-center">
+            <Link href="/" className="inline-flex items-center gap-2">
+              <Tent className="h-12 w-12 text-green-600" />
+              <h1 className="text-3xl font-bold text-slate-900">DogCamp</h1>
+            </Link>
+            <p className="mt-2 text-slate-600">로딩 중...</p>
+          </div>
+        </div>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
 

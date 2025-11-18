@@ -12,6 +12,9 @@ import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import AdminHeader from "@/components/AdminHeader";
 
+// 이 페이지는 항상 동적으로 렌더링되어야 함 (빌드 시 정적 생성 방지)
+export const dynamic = 'force-dynamic';
+
 // 관리자 페이지용 캠핑장 데이터 가져오기
 async function getAdminCampsites() {
   try {
