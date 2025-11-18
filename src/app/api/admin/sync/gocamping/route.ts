@@ -33,13 +33,15 @@ export async function POST() {
 
   try {
     // 1. SourceSite 조회 또는 생성
-    let sourceSite = await supabase
+    const { data: existingSourceSite, error: findError } = await supabase
       .from("SourceSite")
       .select("id")
       .eq("name", "고캠핑(공공데이터포털)")
       .single();
 
-    if (sourceSite.error || !sourceSite.data) {
+    let sourceSiteId: string;
+
+    if (findError || !existingSourceSite) {
       // SourceSite가 없으면 생성
       const { data: newSourceSite, error: createError } = await supabase
         .from("SourceSite")
@@ -55,14 +57,16 @@ export async function POST() {
       if (createError || !newSourceSite) {
         throw new Error("SourceSite 생성 실패");
       }
-      sourceSite = { data: newSourceSite, error: null };
+      sourceSiteId = newSourceSite.id;
+    } else {
+      sourceSiteId = existingSourceSite.id;
     }
 
     // 2. CrawlLog 생성
     const { data: crawlLog, error: logError } = await supabase
       .from("CrawlLog")
       .insert({
-        sourceSiteId: sourceSite.data.id,
+        sourceSiteId: sourceSiteId,
         status: "RUNNING",
         startedAt: startTime.toISOString(),
       })

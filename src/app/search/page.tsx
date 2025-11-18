@@ -3,6 +3,7 @@ import { Tent } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import CampsiteList from "@/components/CampsiteList";
+import { Suspense } from "react";
 
 // 실제 DB에서 캠핑장 데이터 가져오기
 async function getCampsites() {
@@ -85,7 +86,9 @@ export default async function SearchPage() {
           </p>
         </div>
 
-        <CampsiteList campsites={campsites} />
+        <Suspense fallback={<div className="text-center py-12">로딩 중...</div>}>
+          <CampsiteList campsites={campsites} />
+        </Suspense>
       </div>
 
       {/* Footer */}

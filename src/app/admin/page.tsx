@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tent, Edit, Trash2 } from "lucide-react";
+import { Tent, Edit, Trash2, Plus } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import AdminHeader from "@/components/AdminHeader";

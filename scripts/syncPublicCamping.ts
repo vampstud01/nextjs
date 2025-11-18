@@ -105,20 +105,8 @@ async function fetchGoCampingPage(
  * animalCmgCl 필드를 DogPolicy 구조로 변환
  */
 function mapAnimalToDogPolicy(animalCmgCl?: string) {
-  if (!animalCmgCl || animalCmgCl.trim() === '') {
-    return {
-      allowed: null,
-      sizeCategory: null,
-      maxDogs: null,
-      extraFee: null,
-      indoorAllowed: null,
-      outdoorOnly: null,
-      note: null,
-    };
-  }
-
-  const text = animalCmgCl.trim();
-  let allowed: boolean | null = null;
+  const text = animalCmgCl?.trim() || '';
+  let allowed = false; // 기본값: 불가
   let sizeCategory: 'SMALL' | 'MEDIUM' | 'LARGE' | null = null;
 
   // 불가능 키워드 체크
@@ -144,7 +132,7 @@ function mapAnimalToDogPolicy(animalCmgCl?: string) {
     extraFee: null,
     indoorAllowed: null,
     outdoorOnly: null,
-    note: text, // 원문 전체를 note에 저장
+    note: text || null, // 원문 전체를 note에 저장
   };
 }
 
@@ -211,13 +199,17 @@ async function syncPublicCamping() {
       sourceSiteId: sourceSite.id,
       startedAt: new Date(),
       status: 'RUNNING',
-      newItemsCount: 0,
-      updatedItemsCount: 0,
+      itemsProcessed: 0,
+      itemsCreated: 0,
+      itemsUpdated: 0,
+      itemsFailed: 0,
     },
   });
 
-  let totalNew = 0;
+  let totalProcessed = 0;
+  let totalCreated = 0;
   let totalUpdated = 0;
+  let totalFailed = 0;
   let pageNo = 1;
   const pageSize = 100;
 
@@ -234,48 +226,62 @@ async function syncPublicCamping() {
       console.log(`[Fetch] ${items.length}개 캠핑장 데이터 받음`);
 
       for (const raw of items) {
-        const id = `gocamping-${raw.contentId}`;
-        const region = `${raw.doNm} ${raw.sigunguNm}`.trim();
-        const dogPolicy = mapAnimalToDogPolicy(raw.animalCmgCl);
-        const facilities = parseFacilities(raw.sbrsCl, raw.sbrsEtc);
+        try {
+          totalProcessed++;
+          const id = `gocamping-${raw.contentId}`;
+          const region = `${raw.doNm} ${raw.sigunguNm}`.trim();
+          const dogPolicy = mapAnimalToDogPolicy(raw.animalCmgCl);
+          const facilities = parseFacilities(raw.sbrsCl, raw.sbrsEtc);
 
-        // Campsite upsert
-        const campsite = await prisma.campsite.upsert({
-          where: { id },
-          update: {
-            name: raw.facltNm,
-            address: raw.addr2 ? `${raw.addr1} ${raw.addr2}`.trim() : raw.addr1,
-            region,
-            latitude: raw.mapY ? parseFloat(raw.mapY) : null,
-            longitude: raw.mapX ? parseFloat(raw.mapX) : null,
-            phone: raw.tel || null,
-            mainImageUrl: raw.firstImageUrl || null,
-            externalUrl: raw.homepage || null,
-            sourceSiteId: sourceSite.id,
-          },
-          create: {
-            id,
-            name: raw.facltNm,
-            address: raw.addr2 ? `${raw.addr1} ${raw.addr2}`.trim() : raw.addr1,
-            region,
-            latitude: raw.mapY ? parseFloat(raw.mapY) : null,
-            longitude: raw.mapX ? parseFloat(raw.mapX) : null,
-            phone: raw.tel || null,
-            mainImageUrl: raw.firstImageUrl || null,
-            externalUrl: raw.homepage || null,
-            sourceSiteId: sourceSite.id,
-          },
-        });
+          // 기존 캠핑장 확인
+          const existingCampsite = await prisma.campsite.findUnique({
+            where: { id },
+          });
 
-        // DogPolicy upsert
-        await prisma.dogPolicy.upsert({
-          where: { campsiteId: campsite.id },
-          update: dogPolicy,
-          create: {
-            campsiteId: campsite.id,
-            ...dogPolicy,
-          },
-        });
+          // Campsite upsert
+          const campsite = await prisma.campsite.upsert({
+            where: { id },
+            update: {
+              name: raw.facltNm,
+              address: raw.addr2 ? `${raw.addr1} ${raw.addr2}`.trim() : raw.addr1,
+              region,
+              latitude: raw.mapY ? parseFloat(raw.mapY) : null,
+              longitude: raw.mapX ? parseFloat(raw.mapX) : null,
+              phone: raw.tel || null,
+              mainImageUrl: raw.firstImageUrl || null,
+              externalUrl: raw.homepage || null,
+              sourceSiteId: sourceSite.id,
+            },
+            create: {
+              id,
+              name: raw.facltNm,
+              address: raw.addr2 ? `${raw.addr1} ${raw.addr2}`.trim() : raw.addr1,
+              region,
+              latitude: raw.mapY ? parseFloat(raw.mapY) : null,
+              longitude: raw.mapX ? parseFloat(raw.mapX) : null,
+              phone: raw.tel || null,
+              mainImageUrl: raw.firstImageUrl || null,
+              externalUrl: raw.homepage || null,
+              sourceSiteId: sourceSite.id,
+            },
+          });
+
+          // 통계 카운트
+          if (existingCampsite) {
+            totalUpdated++;
+          } else {
+            totalCreated++;
+          }
+
+          // DogPolicy upsert
+          await prisma.dogPolicy.upsert({
+            where: { campsiteId: campsite.id },
+            update: dogPolicy,
+            create: {
+              campsiteId: campsite.id,
+              ...dogPolicy,
+            },
+          });
 
         // FacilityTag 및 CampsiteFacility 처리
         for (const facName of facilities) {
@@ -305,9 +311,10 @@ async function syncPublicCamping() {
             },
           });
         }
-
-        // 통계 카운트 (신규/갱신 구분은 단순화)
-        totalUpdated += 1;
+        } catch (itemError) {
+          console.error(`[ERROR] 캠핑장 ${raw.contentId} 처리 실패:`, itemError);
+          totalFailed++;
+        }
       }
 
       pageNo += 1;
@@ -320,16 +327,20 @@ async function syncPublicCamping() {
     await prisma.crawlLog.update({
       where: { id: crawlLog.id },
       data: {
-        finishedAt: new Date(),
+        completedAt: new Date(),
         status: 'SUCCESS',
-        newItemsCount: totalNew,
-        updatedItemsCount: totalUpdated,
+        itemsProcessed: totalProcessed,
+        itemsCreated: totalCreated,
+        itemsUpdated: totalUpdated,
+        itemsFailed: totalFailed,
+        message: '동기화가 성공적으로 완료되었습니다.',
       },
     });
 
     console.log('\n========================================');
     console.log('동기화 완료');
-    console.log(`총 처리: ${totalUpdated}개`);
+    console.log(`총 처리: ${totalProcessed}개`);
+    console.log(`신규: ${totalCreated}개, 업데이트: ${totalUpdated}개, 실패: ${totalFailed}개`);
     console.log('========================================');
   } catch (error) {
     console.error('[ERROR] 동기화 중 오류 발생:', error);
@@ -338,9 +349,13 @@ async function syncPublicCamping() {
     await prisma.crawlLog.update({
       where: { id: crawlLog.id },
       data: {
-        finishedAt: new Date(),
+        completedAt: new Date(),
         status: 'FAILED',
-        errorMessage: error instanceof Error ? error.message : String(error),
+        itemsProcessed: totalProcessed,
+        itemsCreated: totalCreated,
+        itemsUpdated: totalUpdated,
+        itemsFailed: totalFailed,
+        message: error instanceof Error ? error.message : String(error),
       },
     });
 
