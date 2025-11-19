@@ -34,126 +34,126 @@ async function processBatch(
   let updated = 0;
   let failed = 0;
 
-  for (const item of items) {
-    try {
+    for (const item of items) {
+      try {
       processed++;
 
-      const externalId = `gocamping-${item.contentId}`;
+        const externalId = `gocamping-${item.contentId}`;
 
-      // 기존 캠핑장 확인
-      const { data: existing } = await supabase
-        .from("Campsite")
-        .select("id")
-        .eq("externalId", externalId)
-        .single();
-
-      // 반려견 정책 파싱
-      const dogAllowed = item.animalCmgCl?.includes("가능");
-      let dogSizeCategory = null;
-      if (dogAllowed) {
-        if (item.animalCmgCl?.includes("소형견")) {
-          dogSizeCategory = "SMALL";
-        } else if (item.animalCmgCl?.includes("중형견")) {
-          dogSizeCategory = "MEDIUM";
-        } else if (item.animalCmgCl?.includes("대형견")) {
-          dogSizeCategory = "LARGE";
-        }
-      }
-
-      if (existing) {
-        // 업데이트
-        const { error: updateError } = await supabase
+        // 기존 캠핑장 확인
+        const { data: existing } = await supabase
           .from("Campsite")
-          .update({
-            name: item.facltNm || "",
-            address: item.addr1 || "",
-            phone: item.tel || null,
-            mainImageUrl: item.firstImageUrl || null,
-            externalUrl: item.homepage || null,
-            intro: item.intro || null,
-            updatedAt: new Date().toISOString(),
-          })
-          .eq("id", existing.id);
-
-        if (updateError) {
-          throw updateError;
-        }
-
-        // DogPolicy 업데이트
-        const { data: existingPolicy } = await supabase
-          .from("DogPolicy")
           .select("id")
-          .eq("campsiteId", existing.id)
+          .eq("externalId", externalId)
           .single();
 
-        if (existingPolicy) {
-          await supabase
-            .from("DogPolicy")
+        // 반려견 정책 파싱
+        const dogAllowed = item.animalCmgCl?.includes("가능");
+        let dogSizeCategory = null;
+        if (dogAllowed) {
+          if (item.animalCmgCl?.includes("소형견")) {
+            dogSizeCategory = "SMALL";
+          } else if (item.animalCmgCl?.includes("중형견")) {
+            dogSizeCategory = "MEDIUM";
+          } else if (item.animalCmgCl?.includes("대형견")) {
+            dogSizeCategory = "LARGE";
+          }
+        }
+
+        if (existing) {
+          // 업데이트
+          const { error: updateError } = await supabase
+            .from("Campsite")
             .update({
+              name: item.facltNm || "",
+              address: item.addr1 || "",
+              phone: item.tel || null,
+              mainImageUrl: item.firstImageUrl || null,
+              externalUrl: item.homepage || null,
+              intro: item.intro || null,
+            updatedAt: new Date().toISOString(),
+            })
+            .eq("id", existing.id);
+
+          if (updateError) {
+            throw updateError;
+          }
+
+          // DogPolicy 업데이트
+          const { data: existingPolicy } = await supabase
+            .from("DogPolicy")
+            .select("id")
+            .eq("campsiteId", existing.id)
+            .single();
+
+          if (existingPolicy) {
+            await supabase
+              .from("DogPolicy")
+              .update({
+                allowed: dogAllowed,
+                sizeCategory: dogSizeCategory,
+                note: item.animalCmgCl || null,
+              })
+              .eq("id", existingPolicy.id);
+          } else if (dogAllowed) {
+          const newDogPolicyId = createId();
+            await supabase.from("DogPolicy").insert({
+            id: newDogPolicyId,
+              campsiteId: existing.id,
               allowed: dogAllowed,
               sizeCategory: dogSizeCategory,
               note: item.animalCmgCl || null,
-            })
-            .eq("id", existingPolicy.id);
-        } else if (dogAllowed) {
-          const newDogPolicyId = createId();
-          await supabase.from("DogPolicy").insert({
-            id: newDogPolicyId,
-            campsiteId: existing.id,
-            allowed: dogAllowed,
-            sizeCategory: dogSizeCategory,
-            note: item.animalCmgCl || null,
-          });
-        }
+            });
+          }
 
         updated++;
-      } else {
-        // 생성
+        } else {
+          // 생성
         const newCampsiteId = createId();
         const now = new Date().toISOString();
-        const { data: newCampsite, error: createError } = await supabase
-          .from("Campsite")
-          .insert({
+          const { data: newCampsite, error: createError } = await supabase
+            .from("Campsite")
+            .insert({
             id: newCampsiteId,
-            externalId,
-            name: item.facltNm || "",
-            address: item.addr1 || "",
-            phone: item.tel || null,
-            mainImageUrl: item.firstImageUrl || null,
-            externalUrl: item.homepage || null,
-            intro: item.intro || null,
+              externalId,
+              name: item.facltNm || "",
+              address: item.addr1 || "",
+              phone: item.tel || null,
+              mainImageUrl: item.firstImageUrl || null,
+              externalUrl: item.homepage || null,
+              intro: item.intro || null,
             createdAt: now,
             updatedAt: now,
-          })
-          .select()
-          .single();
+            })
+            .select()
+            .single();
 
-        if (createError) {
-          throw createError;
-        }
+          if (createError) {
+            throw createError;
+          }
 
-        // DogPolicy 생성
-        if (dogAllowed && newCampsite) {
+          // DogPolicy 생성
+          if (dogAllowed && newCampsite) {
           const newDogPolicyId = createId();
-          await supabase.from("DogPolicy").insert({
+            await supabase.from("DogPolicy").insert({
             id: newDogPolicyId,
-            campsiteId: newCampsite.id,
-            allowed: dogAllowed,
-            sizeCategory: dogSizeCategory,
-            note: item.animalCmgCl || null,
-          });
-        }
+              campsiteId: newCampsite.id,
+              allowed: dogAllowed,
+              sizeCategory: dogSizeCategory,
+              note: item.animalCmgCl || null,
+            });
+          }
 
         created++;
-      }
-    } catch (itemError) {
-      console.error(`Failed to process item ${item.contentId}:`, itemError);
+        }
+      } catch (itemError) {
+        console.error(`Failed to process item ${item.contentId}:`, itemError);
       failed++;
     }
   }
 
   return { processed, created, updated, failed };
-}
+      }
 
 export async function POST() {
   if (!API_KEY) {
@@ -427,7 +427,7 @@ export async function POST() {
           message: isComplete
             ? `모든 데이터 동기화 완료 (${currentIndex}/${totalCount})`
             : `부분 동기화 완료 (${currentIndex}/${totalCount}, 다음 실행 시 ${currentIndex}번째부터 계속)`,
-        })
+      })
         .eq("id", crawlLogId);
     }
 

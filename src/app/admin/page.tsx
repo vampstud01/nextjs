@@ -12,71 +12,36 @@ import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import AdminHeader from "@/components/AdminHeader";
 
-// 이 페이지는 항상 동적으로 렌더링되어야 함 (빌드 시 정적 생성 방지)
-export const dynamic = 'force-dynamic';
-
 // 관리자 페이지용 캠핑장 데이터 가져오기
 async function getAdminCampsites() {
   try {
-    // 환경 변수 확인
-    const hasServiceRoleKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
-    
-    console.log("[Admin] 환경 변수 체크:", {
-      hasSupabaseUrl,
-      hasServiceRoleKey,
-      supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL?.substring(0, 20) + "...",
-    });
-
     const supabase = getSupabaseAdmin();
     
-    // 모든 데이터를 가져오기 위해 페이지네이션 사용
-    let allCampsites: any[] = [];
-    let from = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data: campsites, error } = await supabase
-        .from("Campsite")
-        .select(
-          `
-          *,
-          dogPolicy:DogPolicy(*),
-          facilities:CampsiteFacility(
-            facilityTag:FacilityTag(*)
-          )
+    // 모든 데이터를 가져오기 위해 range 사용
+    const { data: campsites, error } = await supabase
+      .from("Campsite")
+      .select(
         `
+        *,
+        dogPolicy:DogPolicy(*),
+        facilities:CampsiteFacility(
+          facilityTag:FacilityTag(*)
         )
-        .order("createdAt", { ascending: false })
-        .range(from, from + pageSize - 1);
+      `
+      )
+      .order("createdAt", { ascending: false })
+      .range(0, 9999); // 충분히 큰 범위로 설정
 
-      if (error) {
-        console.error("[Admin] Supabase query error:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
-        });
-        break;
-      }
-
-      if (campsites && campsites.length > 0) {
-        allCampsites = allCampsites.concat(campsites);
-        from += pageSize;
-        hasMore = campsites.length === pageSize;
-      } else {
-        hasMore = false;
-      }
-    }
-
-    console.log("[Admin] 총 조회된 캠핑장 수:", allCampsites.length);
-
-    if (!allCampsites || allCampsites.length === 0) {
+    if (error) {
+      console.error("Supabase query error:", error);
       return [];
     }
 
-    return allCampsites.map((campsite: any) => ({
+    if (!campsites) {
+      return [];
+    }
+
+    return campsites.map((campsite: any) => ({
       id: campsite.id,
       name: campsite.name,
       region: campsite.address?.split(" ").slice(0, 2).join(" ") || "",
@@ -87,47 +52,20 @@ async function getAdminCampsites() {
       facilities: campsite.facilities?.map((cf: any) => cf.facilityTag?.name).filter(Boolean) || [],
       createdAt: campsite.createdAt,
     }));
-  } catch (error: any) {
-    console.error("[Admin] Failed to fetch campsites:", {
-      message: error?.message,
-      stack: error?.stack,
-      name: error?.name,
-    });
+  } catch (error) {
+    console.error("Failed to fetch campsites:", error);
     return [];
   }
 }
 
 export default async function AdminPage() {
   const campsites = await getAdminCampsites();
-  
-  // 환경 변수 체크
-  const hasServiceRoleKey = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const hasSupabaseUrl = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const envError = !hasServiceRoleKey || !hasSupabaseUrl;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
       <AdminHeader showAddButton={true} />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* 환경 변수 오류 알림 */}
-        {envError && (
-          <div className="mb-6 rounded-lg border-2 border-red-300 bg-red-50 p-4">
-            <h3 className="mb-2 font-semibold text-red-800">환경 변수 설정 오류</h3>
-            <ul className="list-disc space-y-1 pl-5 text-sm text-red-700">
-              {!hasSupabaseUrl && (
-                <li>NEXT_PUBLIC_SUPABASE_URL이 설정되지 않았습니다.</li>
-              )}
-              {!hasServiceRoleKey && (
-                <li>SUPABASE_SERVICE_ROLE_KEY가 설정되지 않았습니다.</li>
-              )}
-            </ul>
-            <p className="mt-2 text-sm text-red-600">
-              Vercel 대시보드에서 환경 변수를 설정해주세요.
-            </p>
-          </div>
-        )}
-
         {/* Page Title */}
         <div className="mb-8">
           <h2 className="mb-2 text-3xl font-bold text-slate-900">
