@@ -9,28 +9,53 @@ import { Suspense } from "react";
 async function getCampsites() {
   try {
     // Supabase 클라이언트를 사용하여 캠핑장 데이터 가져오기
-    // 모든 데이터를 가져오기 위해 range 사용
+    // Supabase의 기본 limit은 1000개이므로, 모든 데이터를 가져오기 위해 페이지네이션 사용
     // 외래 키 관계를 명시적으로 지정: DogPolicy.campsiteId -> Campsite.id
-    const { data: campsites, error } = await supabase
-      .from('Campsite')
-      .select(`
-        *,
-        DogPolicy!DogPolicy_campsiteId_fkey(*),
-        facilities:CampsiteFacility(
-          facilityTag:FacilityTag(*)
-        )
-      `)
-      .order('name', { ascending: true })
-      .range(0, 9999); // 충분히 큰 범위로 설정
+    const allCampsites: any[] = [];
+    const pageSize = 1000;
+    let from = 0;
+    let hasMore = true;
 
-    if (error) {
-      console.error("Supabase query error:", error);
+    while (hasMore) {
+      const { data: campsites, error } = await supabase
+        .from('Campsite')
+        .select(`
+          *,
+          DogPolicy!DogPolicy_campsiteId_fkey(*),
+          facilities:CampsiteFacility(
+            facilityTag:FacilityTag(*)
+          )
+        `)
+        .order('name', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        console.error("Supabase query error:", error);
+        break;
+      }
+
+      if (!campsites || campsites.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      allCampsites.push(...campsites);
+
+      // 다음 페이지가 있는지 확인
+      if (campsites.length < pageSize) {
+        hasMore = false;
+      } else {
+        from += pageSize;
+      }
+    }
+
+    const campsites = allCampsites;
+
+    if (!campsites || campsites.length === 0) {
       return [];
     }
 
-    if (!campsites) {
-      return [];
-    }
+    console.log(`[Search] Fetched ${campsites.length} campsites from database`);
 
     // 디버깅: dogPolicy가 있는 캠핑장 개수 확인
     const withDogPolicy = campsites.filter((c: any) => {
