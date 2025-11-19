@@ -9,17 +9,19 @@ import { Suspense } from "react";
 async function getCampsites() {
   try {
     // Supabase 클라이언트를 사용하여 캠핑장 데이터 가져오기
+    // 모든 데이터를 가져오기 위해 range 사용
+    // 외래 키 관계를 명시적으로 지정: DogPolicy.campsiteId -> Campsite.id
     const { data: campsites, error } = await supabase
       .from('Campsite')
       .select(`
         *,
-        dogPolicy:DogPolicy(*),
+        DogPolicy!DogPolicy_campsiteId_fkey(*),
         facilities:CampsiteFacility(
           facilityTag:FacilityTag(*)
         )
       `)
       .order('name', { ascending: true })
-      .limit(100);
+      .range(0, 9999); // 충분히 큰 범위로 설정
 
     if (error) {
       console.error("Supabase query error:", error);
@@ -30,21 +32,59 @@ async function getCampsites() {
       return [];
     }
 
-    return campsites.map((campsite: any) => ({
-      id: campsite.id,
-      name: campsite.name,
-      region: campsite.address?.split(" ").slice(0, 2).join(" ") || "",
-      address: campsite.address || "",
-      phone: campsite.phone || "",
-      mainImageUrl: campsite.mainImageUrl || "",
-      externalUrl: campsite.externalUrl || "",
-      dogPolicy: {
-        allowed: campsite.dogPolicy?.allowed || false,
-        sizeCategory: campsite.dogPolicy?.sizeCategory || null,
-        note: campsite.dogPolicy?.note || "",
-      },
-      facilities: campsite.facilities?.map((cf: any) => cf.facilityTag?.name).filter(Boolean) || [],
-    }));
+    // 디버깅: dogPolicy가 있는 캠핑장 개수 확인
+    const withDogPolicy = campsites.filter((c: any) => {
+      const policy = Array.isArray(c.DogPolicy) ? c.DogPolicy[0] : (c.DogPolicy || c.dogPolicy);
+      return policy !== null && policy !== undefined;
+    }).length;
+    const dogFriendlyCount = campsites.filter((c: any) => {
+      const policy = Array.isArray(c.DogPolicy) ? c.DogPolicy[0] : (c.DogPolicy || c.dogPolicy);
+      return policy?.allowed === true;
+    }).length;
+    console.log(`[Search] Total campsites: ${campsites.length}, With dogPolicy: ${withDogPolicy}, Dog-friendly: ${dogFriendlyCount}`);
+    
+    // 샘플 데이터 구조 확인
+    if (campsites.length > 0) {
+      const sample = campsites[0];
+      const samplePolicy = Array.isArray(sample.DogPolicy) ? sample.DogPolicy[0] : (sample.DogPolicy || sample.dogPolicy);
+      console.log(`[Search] Sample campsite structure:`, {
+        id: sample.id,
+        name: sample.name,
+        hasDogPolicy: !!samplePolicy,
+        hasDogPolicyKey: 'DogPolicy' in sample,
+        hasDogPolicyKeyLower: 'dogPolicy' in sample,
+        dogPolicyType: typeof samplePolicy,
+        dogPolicyValue: samplePolicy,
+        allKeys: Object.keys(sample),
+      });
+    }
+
+    return campsites.map((campsite: any) => {
+      // DogPolicy는 배열이거나 단일 객체일 수 있음
+      const dogPolicy = Array.isArray(campsite.DogPolicy) 
+        ? campsite.DogPolicy[0] 
+        : campsite.DogPolicy || campsite.dogPolicy;
+      
+      return {
+        id: campsite.id,
+        name: campsite.name,
+        region: campsite.address?.split(" ").slice(0, 2).join(" ") || "",
+        address: campsite.address || "",
+        phone: campsite.phone || "",
+        mainImageUrl: campsite.mainImageUrl || "",
+        externalUrl: campsite.externalUrl || "",
+        dogPolicy: dogPolicy ? {
+          allowed: dogPolicy.allowed ?? false,
+          sizeCategory: dogPolicy.sizeCategory || null,
+          note: dogPolicy.note || "",
+        } : {
+          allowed: false,
+          sizeCategory: null,
+          note: "",
+        },
+        facilities: campsite.facilities?.map((cf: any) => cf.facilityTag?.name).filter(Boolean) || [],
+      };
+    });
   } catch (error) {
     console.error("Failed to fetch campsites:", error);
     return [];
