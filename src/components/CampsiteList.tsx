@@ -97,13 +97,27 @@ export default function CampsiteList({ campsites }: CampsiteListProps) {
       const beforeCount = filtered.length;
       filtered = filtered.filter((c) => {
         // dogPolicy가 존재하고 allowed가 정확히 true인 경우만 통과
-        const isAllowed = c.dogPolicy && c.dogPolicy.allowed === true;
-        if (!isAllowed && c.dogPolicy) {
-          console.log(`[Filter] Rejected: ${c.name}, allowed: ${c.dogPolicy.allowed}, type: ${typeof c.dogPolicy.allowed}`);
+        if (!c.dogPolicy) {
+          return false;
+        }
+        // allowed가 boolean이고 true인지 확인
+        const isAllowed = typeof c.dogPolicy.allowed === 'boolean' && c.dogPolicy.allowed === true;
+        if (!isAllowed) {
+          console.log(`[Filter] Rejected: ${c.name}, allowed: ${c.dogPolicy.allowed}, type: ${typeof c.dogPolicy.allowed}, dogPolicy:`, c.dogPolicy);
         }
         return isAllowed;
       });
       console.log(`[Filter] Before: ${beforeCount}, After: ${filtered.length}, Dog-friendly filter: ${showOnlyDogFriendly}`);
+      
+      // 필터링 후 검증: allowed가 false인 캠핑장이 있는지 확인
+      const invalidCampsites = filtered.filter((c) => !c.dogPolicy || c.dogPolicy.allowed !== true);
+      if (invalidCampsites.length > 0) {
+        console.error(`[Filter] ERROR: ${invalidCampsites.length} invalid campsites passed filter:`, invalidCampsites.map(c => ({
+          name: c.name,
+          allowed: c.dogPolicy?.allowed,
+          hasDogPolicy: !!c.dogPolicy
+        })));
+      }
     }
 
     // 지역 필터
@@ -439,7 +453,7 @@ export default function CampsiteList({ campsites }: CampsiteListProps) {
                   )}
                 </div>
 
-                {campsite.dogPolicy.allowed && (
+                {campsite.dogPolicy && campsite.dogPolicy.allowed === true && (
                   <div className="rounded-lg bg-green-50 p-3">
                     <div className="flex items-center gap-2">
                       <Dog className="h-4 w-4 text-green-600" />
