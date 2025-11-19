@@ -95,7 +95,14 @@ export default function CampsiteList({ campsites }: CampsiteListProps) {
     // 반려견 전용 필터
     if (showOnlyDogFriendly) {
       const beforeCount = filtered.length;
-      filtered = filtered.filter((c) => c.dogPolicy?.allowed === true);
+      filtered = filtered.filter((c) => {
+        // dogPolicy가 존재하고 allowed가 정확히 true인 경우만 통과
+        const isAllowed = c.dogPolicy && c.dogPolicy.allowed === true;
+        if (!isAllowed && c.dogPolicy) {
+          console.log(`[Filter] Rejected: ${c.name}, allowed: ${c.dogPolicy.allowed}, type: ${typeof c.dogPolicy.allowed}`);
+        }
+        return isAllowed;
+      });
       console.log(`[Filter] Before: ${beforeCount}, After: ${filtered.length}, Dog-friendly filter: ${showOnlyDogFriendly}`);
     }
 

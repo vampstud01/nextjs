@@ -65,6 +65,19 @@ async function getCampsites() {
         ? campsite.DogPolicy[0] 
         : campsite.DogPolicy || campsite.dogPolicy;
       
+      // allowed 값을 명확하게 boolean으로 변환
+      let allowed = false;
+      if (dogPolicy) {
+        // boolean이면 그대로, 아니면 false
+        if (typeof dogPolicy.allowed === 'boolean') {
+          allowed = dogPolicy.allowed;
+        } else if (dogPolicy.allowed === 'true' || dogPolicy.allowed === 1) {
+          allowed = true;
+        } else {
+          allowed = false;
+        }
+      }
+      
       return {
         id: campsite.id,
         name: campsite.name,
@@ -74,7 +87,7 @@ async function getCampsites() {
         mainImageUrl: campsite.mainImageUrl || "",
         externalUrl: campsite.externalUrl || "",
         dogPolicy: dogPolicy ? {
-          allowed: dogPolicy.allowed ?? false,
+          allowed: allowed,
           sizeCategory: dogPolicy.sizeCategory || null,
           note: dogPolicy.note || "",
         } : {
